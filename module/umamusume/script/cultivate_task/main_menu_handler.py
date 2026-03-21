@@ -10,9 +10,9 @@ from module.umamusume.asset.point import (
     CULTIVATE_TRIP, CULTIVATE_REST, CULTIVATE_SKILL_LEARN,
     TO_TRAINING_SELECT, CULTIVATE_RACE, CULTIVATE_RACE_SUMMER,
     CULTIVATE_MEDIC, CULTIVATE_MEDIC_SUMMER,
-    CULTIVATE_MEDIC_MANT, CULTIVATE_TRIP_MANT, CULTIVATE_RACE_MANT
+    CULTIVATE_MEDIC_MANT, CULTIVATE_MEDIC_MANT_SUMMER,
+    CULTIVATE_TRIP_MANT, CULTIVATE_RACE_MANT, CULTIVATE_RACE_MANT_SUMMER
 )
-from module.umamusume.asset.template import REF_MANT_ON_SALE
 from module.umamusume.define import ScenarioType
 from module.umamusume.constants.game_constants import (
     is_summer_camp_period, is_ura_race, NEW_RUN_DETECTION_DATE,
@@ -41,13 +41,13 @@ def get_trip(ctx):
 
 def get_race(ctx, summer=False):
     if is_mant(ctx):
-        return CULTIVATE_RACE_MANT
+        return CULTIVATE_RACE_MANT_SUMMER if summer else CULTIVATE_RACE_MANT
     return CULTIVATE_RACE_SUMMER if summer else CULTIVATE_RACE
 
 
 def get_medic(ctx, summer=False):
     if is_mant(ctx):
-        return CULTIVATE_MEDIC_MANT
+        return CULTIVATE_MEDIC_MANT_SUMMER if summer else CULTIVATE_MEDIC_MANT
     return CULTIVATE_MEDIC_SUMMER if summer else CULTIVATE_MEDIC
 
 
@@ -67,7 +67,12 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
                 ctx.cultivate_detail.turn_info_history = ctx.cultivate_detail.turn_info_history[-100:]
         ctx.cultivate_detail.turn_info = TurnInfo()
         ctx.cultivate_detail.turn_info.date = current_date
-        
+        ctx.cultivate_detail.mant_shop_scanned_this_turn = False
+
+        if is_mant(ctx):
+            from module.umamusume.scenario.mant.main_menu import handle_mant_turn_start
+            handle_mant_turn_start(ctx, current_date)
+
         if current_date == NEW_RUN_DETECTION_DATE:
             log.info("new run detected resetting manual purchase state")
             ctx.cultivate_detail.manual_purchase_completed = False
@@ -75,10 +80,30 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
                 delattr(ctx.cultivate_detail, 'manual_purchase_initiated')
 
     if is_mant(ctx):
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        sale_result = image_match(img_gray, REF_MANT_ON_SALE)
-        if sale_result.find_match:
-            log.info("shop on sale")
+        from module.umamusume.scenario.mant.main_menu import (
+            handle_mant_shop_scan, handle_mant_on_sale,
+            handle_mant_afflictions, handle_mant_rival_race,
+            read_shop_coins, handle_mant_inventory_scan
+        )
+        if handle_mant_inventory_scan(ctx, current_date):
+            return
+        from module.umamusume.scenario.mant.inventory import has_instant_use_items, handle_instant_use_items
+        if has_instant_use_items(ctx):
+            handle_instant_use_items(ctx)
+            ctx.cultivate_detail.turn_info.parse_main_menu_finish = False
+            return
+        if not getattr(ctx.cultivate_detail.turn_info, 'mant_coins_read', False):
+            is_summer = is_summer_camp_period(current_date)
+            is_climax = current_date > 72
+            coins = read_shop_coins(img, is_summer, is_climax)
+            ctx.cultivate_detail.turn_info.mant_coins_read = True
+            ctx.cultivate_detail.mant_coins = coins
+            log.info("shop coins: %d", coins)
+        if handle_mant_shop_scan(ctx, current_date):
+            return
+        handle_mant_on_sale(img)
+        if handle_mant_afflictions(ctx, img):
+            return
 
     if not ctx.cultivate_detail.turn_info.parse_main_menu_finish:
         parse_cultivate_main_menu(ctx, img)
@@ -89,7 +114,7 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
         has_extra_race = len([race_id for race_id in ctx.cultivate_detail.extra_race_list 
                              if race_id in available_races]) != 0
         
-        if has_extra_race:
+        if has_extra_race and not is_mant(ctx):
             log.info("Extra races available for current date - prioritizing races above all else")
             if ctx.cultivate_detail.turn_info.turn_operation is None:
                 ctx.cultivate_detail.turn_info.turn_operation = TurnOperation()
@@ -104,6 +129,8 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             ctx.cultivate_detail.turn_info.parse_train_info_finish = True
             ctx.cultivate_detail.turn_info.parse_main_menu_finish = True
             return
+        if has_extra_race and is_mant(ctx):
+            log.info("MANT: extra race available but scanning training first")
         
         if ctx.cultivate_detail.prioritize_recreation:
             img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -198,9 +225,12 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             ctx.ctrl.click_by_point(get_trip(ctx))
         return
 
+    if is_mant(ctx):
+        handle_mant_rival_race(ctx, img)
+
     if not ctx.cultivate_detail.turn_info.parse_train_info_finish:
         limit = int(getattr(ctx.cultivate_detail, 'rest_threshold', getattr(ctx.cultivate_detail, 'rest_treshold', getattr(ctx.cultivate_detail, 'fast_path_energy_limit', 48))))
-        if has_extra_race:
+        if has_extra_race and not is_mant(ctx):
             ctx.cultivate_detail.turn_info.parse_train_info_finish = True
             return
         if limit == 0:
@@ -211,7 +241,11 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             if energy == 0:
                 time.sleep(0.15)
                 energy = read_energy()
-        if energy <= limit:
+        mant_skip = False
+        if is_mant(ctx):
+            from module.umamusume.scenario.mant.inventory import should_skip_fast_path
+            mant_skip = should_skip_fast_path(ctx)
+        if energy <= limit and not mant_skip:
             if should_use_pal_outing_simple(ctx):
                 ctx.ctrl.click_by_point(get_trip(ctx))
             else:
@@ -241,7 +275,10 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             img = ctx.ctrl.get_screen()
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             if is_mant(ctx):
-                check_point = img_rgb[1125, 40]
+                if is_summer:
+                    check_point = img_rgb[1118, 100]
+                else:
+                    check_point = img_rgb[1125, 40]
             elif is_summer:
                 check_point = img_rgb[1130, 200]
             else:

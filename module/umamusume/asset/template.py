@@ -14,8 +14,10 @@ UMAMUSUME_REF_AOHARUHAI_TEMPLATE_PATH = "/umamusume/ref/aoharuhai"
 
 UI_INFO = Template("INFO", UMAMUSUME_UI_TEMPLATE_PATH)
 UI_MAIN_MENU = Template("MAIN_MENU", UMAMUSUME_UI_TEMPLATE_PATH)
-UI_CULTIVATE_MAIN_MENU = Template("CULTIVATE_MAIN_MENU", UMAMUSUME_UI_TEMPLATE_PATH)
+UI_CULTIVATE_MAIN_MENU = Template("CULTIVATE_MAIN_MENU", UMAMUSUME_UI_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(12, 3, 105, 38)))
 UI_CULTIVATE_TRAINING_SELECT = Template("CULTIVATE_TRAINING_SELECT", UMAMUSUME_UI_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(12, 3, 105, 38)))
+UI_CULTIVATE_TRAINING_ITEMS = Template("CULTIVATE_TRAINING_ITEMS", UMAMUSUME_UI_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(200, 35, 520, 65)))
+UI_CULTIVATE_USE_TRAINING_ITEMS = Template("CULTIVATE_USE_TRAINING_ITEMS", UMAMUSUME_UI_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(430, 1172, 640, 1228)))
 UI_CULTIVATE_TRAINING_SELECT_1 = Template("CULTIVATE_TRAINING_SELECT_1", UMAMUSUME_UI_TEMPLATE_PATH)
 UI_CULTIVATE_SCENARIO_SELECT = Template("CULTIVATE_SCENARIO_SELECT", UMAMUSUME_UI_TEMPLATE_PATH)
 UI_CULTIVATE_FOLLOW_SUPPORT_CARD_SELECT = Template("CULTIVATE_FOLLOW_SUPPORT_CARD_SELECT", UMAMUSUME_UI_TEMPLATE_PATH)
@@ -122,7 +124,7 @@ UI_CONFIRMATION_LEARNSKILL_BUTTON = Template("CONFIRMATION_LEARNSKILL_BUTTON", U
 UI_FRIEND_RECREATION = Template("FRIEND_RECREATION", UMAMUSUME_UI_TEMPLATE_PATH)
 UI_FRIEND_RECREATION_COMPLETE = Template("FRIEND_RECREATION_COMPLETE", UMAMUSUME_UI_TEMPLATE_PATH)
 
-UI_RECREATION_FRIEND_NOTIFICATION = Template("recreation_friend_notification", UMAMUSUME_UI_TEMPLATE_PATH)
+UI_RECREATION_FRIEND_NOTIFICATION = Template("recreation_friend_notification", UMAMUSUME_UI_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(294, 1047, 452, 1124)))
 
 UI_CULTIVATE_FINISH = Template("CULTIVATE_FINISH", UMAMUSUME_UI_TEMPLATE_PATH)
 UI_RECEIVE_CUP = Template("RECEIVE_CUP", UMAMUSUME_UI_TEMPLATE_PATH)
@@ -220,118 +222,67 @@ UMA_ICON_URA_NPC_2 = Template("URA_NPC_2", UMAMUSUME_UMA_ICON_TEMPLATE_PATH)
 UMA_ICON_FRIEND_1 = Template("FRIEND_1", UMAMUSUME_UMA_ICON_TEMPLATE_PATH)
 
 
-REF_MANT_ON_SALE = Template("mant_on_sale", UMAMUSUME_REF_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(392, 1062, 432, 1087)))
-REF_MANT_FINAL_END = Template("mant_final_end", UMAMUSUME_REF_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(280, 10, 450, 90)))
-
 UMAMUSUME_REF_MANT_SHOP_PATH = "/umamusume/ref/mantShop"
 
-REF_MANT_AROMA = Template("aroma", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_BBQ = Template("bbq", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_BINOC = Template("binoc", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_CATFOOD = Template("catfood", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_CUREALL = Template("cureall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_ENERGYDRINKLARGE = Template("energydrinklarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_ENERGYDRINKMEDIUM = Template("energydrinkmedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_ENERGYDRINKSMALL = Template("energydrinksmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GREENJUICE = Template("greenjuice", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GUTSLARGE = Template("gutslarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GUTSMEDIUM = Template("gutsmedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GUTSPET = Template("gutspet", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GUTSSMALL = Template("gutssmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_GUTSWEIGHTS = Template("gutsweights", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_HANDCREAM = Template("handcream", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_HAT = Template("hat", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MAXLARGE = Template("maxlarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MAXSMALL = Template("maxsmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MEGALARGE = Template("megalarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MEGAMEDIUM = Template("megamedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MEGASMALL = Template("megasmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MIRROR = Template("mirror", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MOODLARGE = Template("moodlarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_MOODSMALL = Template("moodsmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_PENLIGHT = Template("penlight", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_PILLOW = Template("pillow", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_POWERLARGE = Template("powerlarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_POWERMEDIUM = Template("powermedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_POWERPET = Template("powerpet", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_POWERSMALL = Template("powersmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_POWERWEIGHTS = Template("powerweights", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_PPBOOK = Template("ppbook", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_PRAYER = Template("prayer", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_RB = Template("rb", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_RBEX = Template("rbex", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SCALE = Template("scale", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SCHEDULER = Template("scheduler", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SHUFFLE = Template("shuffle", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SPEEDLARGE = Template("speedlarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SPEEDMEDIUM = Template("speedmedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SPEEDPET = Template("speedpet", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SPEEDSMALL = Template("speedsmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_SPEEDWEIGHTS = Template("speedweights", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_STAMINALARGE = Template("staminalarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_STAMINAMEDIUM = Template("staminamedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_STAMINAPET = Template("staminapet", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_STAMINASMALL = Template("staminasmall", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_STAMINAWEIGHTS = Template("staminaweights", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_USELESS2 = Template("useless2", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_WITLARGE = Template("witlarge", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_WITMEDIUM = Template("witmedium", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_WITPET = Template("witpet", UMAMUSUME_REF_MANT_SHOP_PATH)
-REF_MANT_WITSMALL = Template("witsmall", UMAMUSUME_REF_MANT_SHOP_PATH)
+REF_MANT_ON_SALE = Template("mant_on_sale", UMAMUSUME_REF_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(392, 1062, 432, 1087)))
+REF_BLUE_LINE = Template("blue_line", UMAMUSUME_REF_TEMPLATE_PATH)
+REF_MANT_FINAL_END = Template("mant_final_end", UMAMUSUME_REF_TEMPLATE_PATH, ImageMatchConfig(match_area=Area(280, 10, 450, 90)))
+REF_MANT_SHOP_TITLE = Template("shop_title", UMAMUSUME_REF_MANT_SHOP_PATH, ImageMatchConfig(match_area=Area(17, 8, 78, 35)))
 
-MANT_SHOP_TEMPLATES = {
-    "Aroma": REF_MANT_AROMA,
-    "Bbq": REF_MANT_BBQ,
-    "Binoc": REF_MANT_BINOC,
-    "CatFood": REF_MANT_CATFOOD,
-    "CureAll": REF_MANT_CUREALL,
-    "EnergyDrinkLarge": REF_MANT_ENERGYDRINKLARGE,
-    "EnergyDrinkMedium": REF_MANT_ENERGYDRINKMEDIUM,
-    "EnergyDrinkSmall": REF_MANT_ENERGYDRINKSMALL,
-    "GreenJuice": REF_MANT_GREENJUICE,
-    "GutsLarge": REF_MANT_GUTSLARGE,
-    "GutsMedium": REF_MANT_GUTSMEDIUM,
-    "GutsPet": REF_MANT_GUTSPET,
-    "GutsSmall": REF_MANT_GUTSSMALL,
-    "GutsWeights": REF_MANT_GUTSWEIGHTS,
-    "HandCream": REF_MANT_HANDCREAM,
-    "Hat": REF_MANT_HAT,
-    "MaxLarge": REF_MANT_MAXLARGE,
-    "MaxSmall": REF_MANT_MAXSMALL,
-    "MegaLarge": REF_MANT_MEGALARGE,
-    "MegaMedium": REF_MANT_MEGAMEDIUM,
-    "MegaSmall": REF_MANT_MEGASMALL,
-    "Mirror": REF_MANT_MIRROR,
-    "MoodLarge": REF_MANT_MOODLARGE,
-    "MoodSmall": REF_MANT_MOODSMALL,
-    "PenLight": REF_MANT_PENLIGHT,
-    "Pillow": REF_MANT_PILLOW,
-    "PowerLarge": REF_MANT_POWERLARGE,
-    "PowerMedium": REF_MANT_POWERMEDIUM,
-    "PowerPet": REF_MANT_POWERPET,
-    "PowerSmall": REF_MANT_POWERSMALL,
-    "PowerWeights": REF_MANT_POWERWEIGHTS,
-    "PPBook": REF_MANT_PPBOOK,
-    "Prayer": REF_MANT_PRAYER,
-    "Rb": REF_MANT_RB,
-    "Rbex": REF_MANT_RBEX,
-    "Scale": REF_MANT_SCALE,
-    "Scheduler": REF_MANT_SCHEDULER,
-    "Shuffle": REF_MANT_SHUFFLE,
-    "SpeedLarge": REF_MANT_SPEEDLARGE,
-    "SpeedMedium": REF_MANT_SPEEDMEDIUM,
-    "SpeedPet": REF_MANT_SPEEDPET,
-    "SpeedSmall": REF_MANT_SPEEDSMALL,
-    "SpeedWeights": REF_MANT_SPEEDWEIGHTS,
-    "StaminaLarge": REF_MANT_STAMINALARGE,
-    "StaminaMedium": REF_MANT_STAMINAMEDIUM,
-    "StaminaPet": REF_MANT_STAMINAPET,
-    "StaminaSmall": REF_MANT_STAMINASMALL,
-    "StaminaWeights": REF_MANT_STAMINAWEIGHTS,
-    "Useless2": REF_MANT_USELESS2,
-    "WitLarge": REF_MANT_WITLARGE,
-    "WitMedium": REF_MANT_WITMEDIUM,
-    "WitPet": REF_MANT_WITPET,
-    "WitSmall": REF_MANT_WITSMALL,
+# CNN class name -> display key mapping (no template images needed, CNN handles recognition)
+MANT_SHOP_ITEM_NAMES = {
+    "Aroma": "aroma",
+    "Bbq": "bbq",
+    "Binoc": "binoc",
+    "CatFood": "catfood",
+    "CureAll": "cureall",
+    "EnergyDrinkLarge": "energydrinklarge",
+    "EnergyDrinkMedium": "energydrinkmedium",
+    "EnergyDrinkSmall": "energydrinksmall",
+    "GreenJuice": "greenjuice",
+    "GutsLarge": "gutslarge",
+    "GutsMedium": "gutsmedium",
+    "GutsPet": "gutspet",
+    "GutsSmall": "gutssmall",
+    "GutsWeights": "gutsweights",
+    "HandCream": "handcream",
+    "Hat": "hat",
+    "MaxLarge": "maxlarge",
+    "MaxSmall": "maxsmall",
+    "MegaLarge": "megalarge",
+    "MegaMedium": "megamedium",
+    "MegaSmall": "megasmall",
+    "Mirror": "mirror",
+    "MoodLarge": "moodlarge",
+    "MoodSmall": "moodsmall",
+    "PenLight": "penlight",
+    "Pillow": "pillow",
+    "PowerLarge": "powerlarge",
+    "PowerMedium": "powermedium",
+    "PowerPet": "powerpet",
+    "PowerSmall": "powersmall",
+    "PowerWeights": "powerweights",
+    "PPBook": "ppbook",
+    "Prayer": "prayer",
+    "Rb": "rb",
+    "Rbex": "rbex",
+    "Scale": "scale",
+    "Scheduler": "scheduler",
+    "Shuffle": "shuffle",
+    "SpeedLarge": "speedlarge",
+    "SpeedMedium": "speedmedium",
+    "SpeedPet": "speedpet",
+    "SpeedSmall": "speedsmall",
+    "SpeedWeights": "speedweights",
+    "StaminaLarge": "staminalarge",
+    "StaminaMedium": "staminamedium",
+    "StaminaPet": "staminapet",
+    "StaminaSmall": "staminasmall",
+    "StaminaWeights": "staminaweights",
+    "Useless2": "useless2",
+    "WitLarge": "witlarge",
+    "WitMedium": "witmedium",
+    "WitPet": "witpet",
+    "WitSmall": "witsmall",
 }
 

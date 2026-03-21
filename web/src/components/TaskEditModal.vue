@@ -71,7 +71,13 @@
                 </div>
                 </div>
                 </div>
-              
+              <div class="form-group mt-2">
+                <label>Training Data</label>
+                <div class="d-flex align-items-center gap-2">
+                  <span style="font-size:0.85em;color:var(--muted-2)">Press after changing config, deck, or uma to reset training score history</span>
+                  <button type="button" class="btn btn-sm btn-outline-danger" @click="clearCareerData">Clear Training Data</button>
+                </div>
+              </div>
               <div class="row" v-if="selectedScenario === 2">
                 <div class="col-4">
                   <div class="form-group">
@@ -82,11 +88,12 @@
               <div class="row" v-if="selectedScenario === 3">
                 <div class="col-12">
                   <div class="form-group">
-                    <label>Items Selection <small style="color:var(--muted-2);font-weight:400">(I suggest you watch a guide before touching this)</small></label>
+                    <label>Items Selection <small style="color:var(--muted-2);font-weight:400">(I suggest you watch a guide before touching this [you have to adjust this])</small></label>
                     <div class="section-card p-3">
                       <div class="mant-controls mb-2">
                         <button type="button" class="btn btn-sm btn--outline me-1" @click="mantAddTier">+ Add Tier</button>
                         <button type="button" class="btn btn-sm btn--outline me-1" @click="mantRemoveTier" :disabled="!mantCanRemoveTier">- Remove Tier</button>
+                        <span class="mant-coin-label">Number is Min coins to consider buying (per tier)</span>
                       </div>
                       <div class="mant-tierlist">
                         <div v-for="t in mantTierCount" :key="'tier-' + t"
@@ -95,7 +102,10 @@
                              @dragover.prevent="mantDragOverTier = t"
                              @dragleave="mantDragOverTier = null"
                              @drop.prevent="mantDropOnTier(t, $event)">
-                          <div class="mant-tier-label mant-tier-label--prio">Tier {{ t }}</div>
+                          <div class="mant-tier-label mant-tier-label--prio">
+                            <div>Tier {{ t }}</div>
+                            <input v-if="t > 1" type="number" class="mant-coin-input" v-model.number="mantTierThresholds[t]" min="0" :placeholder="String((t - 1) * 50)" />
+                          </div>
                           <div class="mant-tier-items">
                             <div v-for="id in mantGetItemsInTier(t)" :key="id"
                                  class="mant-item-cell"
@@ -112,9 +122,9 @@
                         <label>Use when percentile is (whistle above rest below)</label>
                         <div class="mant-threshold-group">
                           <div class="mant-threshold-row">
-                            <img :src="getMantItemImg('shuffle')" class="mant-threshold-img" />
+                            <img :src="getMantItemImg('reset_whistle')" class="mant-threshold-img" />
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Whistle</span>
+                              <span class="mant-threshold-label">Reset Whistle</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantWhistleThreshold" min="0" max="100" />
                                 <span class="mant-threshold-val">{{ mantWhistleThreshold }}</span>
@@ -124,11 +134,17 @@
                               <button type="button" class="token" :class="{ active: mantWhistleFocusSummer }" @click="mantWhistleFocusSummer = true">Focus Summer</button>
                               <button type="button" class="token" :class="{ active: !mantWhistleFocusSummer }" @click="mantWhistleFocusSummer = false">Off</button>
                             </div>
+                            <div v-if="mantWhistleFocusSummer" class="d-flex align-items-center ms-2 gap-2">
+                              <label class="mant-threshold-label mb-0">Classic +</label>
+                              <input type="number" class="form-control form-control-sm" style="width:60px" v-model.number="mantFocusSummerClassic" min="0" max="100" />
+                              <label class="mant-threshold-label mb-0">Senior +</label>
+                              <input type="number" class="form-control form-control-sm" style="width:60px" v-model.number="mantFocusSummerSenior" min="0" max="100" />
+                            </div>
                           </div>
                           <div class="mant-threshold-row">
-                            <img :src="getMantItemImg('megasmall')" class="mant-threshold-img" />
+                            <img :src="getMantItemImg('coaching_megaphone')" class="mant-threshold-img" />
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Mega Small</span>
+                              <span class="mant-threshold-label">Coaching Megaphone</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantMegaSmallThreshold" min="0" max="100" />
                                 <span class="mant-threshold-val">{{ mantMegaSmallThreshold }}</span>
@@ -136,9 +152,9 @@
                             </div>
                           </div>
                           <div class="mant-threshold-row">
-                            <img :src="getMantItemImg('megamedium')" class="mant-threshold-img" />
+                            <img :src="getMantItemImg('motivating_megaphone')" class="mant-threshold-img" />
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Mega Medium</span>
+                              <span class="mant-threshold-label">Motivating Megaphone</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantMegaMediumThreshold" min="0" max="100" />
                                 <span class="mant-threshold-val">{{ mantMegaMediumThreshold }}</span>
@@ -146,9 +162,9 @@
                             </div>
                           </div>
                           <div class="mant-threshold-row">
-                            <img :src="getMantItemImg('megalarge')" class="mant-threshold-img" />
+                            <img :src="getMantItemImg('empowering_megaphone')" class="mant-threshold-img" />
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Mega Large</span>
+                              <span class="mant-threshold-label">Empowering Megaphone</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantMegaLargeThreshold" min="0" max="100" />
                                 <span class="mant-threshold-val">{{ mantMegaLargeThreshold }}</span>
@@ -157,16 +173,45 @@
                           </div>
                           <div class="mant-threshold-row">
                             <div class="mant-threshold-img-grid">
-                              <img :src="getMantItemImg('speedweights')" />
-                              <img :src="getMantItemImg('staminaweights')" />
-                              <img :src="getMantItemImg('powerweights')" />
-                              <img :src="getMantItemImg('gutsweights')" />
+                              <img :src="getMantItemImg('speed_ankle_weights')" />
+                              <img :src="getMantItemImg('stamina_ankle_weights')" />
+                              <img :src="getMantItemImg('power_ankle_weights')" />
+                              <img :src="getMantItemImg('guts_ankle_weights')" />
                             </div>
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Training Weights</span>
+                              <span class="mant-threshold-label">Ankle Weights</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantTrainingWeightsThreshold" min="0" max="100" />
                                 <span class="mant-threshold-val">{{ mantTrainingWeightsThreshold }}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="mant-threshold-row">
+                            <img :src="getMantItemImg('good-luck_charm')" class="mant-threshold-img" />
+                            <div class="mant-threshold-controls">
+                              <span class="mant-threshold-label">Active charm when best training (without failure rate penalty) percentile ></span>
+                              <div class="mant-threshold-slider-row">
+                                <input type="range" class="hint-slider" v-model.number="mantCharmThreshold" min="0" max="100" />
+                                <span class="mant-threshold-val">{{ mantCharmThreshold }}</span>
+                              </div>
+                              <span class="mant-threshold-label">Charm activation failure rate</span>
+                              <div class="mant-threshold-slider-row">
+                                <input type="range" class="hint-slider" v-model.number="mantCharmFailureRate" min="0" max="100" />
+                                <span class="mant-threshold-val">{{ mantCharmFailureRate }}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mant-thresholds mt-3">
+                        <label>Race</label>
+                        <div class="mant-threshold-group">
+                          <div class="mant-threshold-row">
+                            <div class="mant-threshold-controls">
+                              <span class="mant-threshold-label">Skip optional race if training percentile above (0 = disabled)</span>
+                              <div class="mant-threshold-slider-row">
+                                <input type="range" class="hint-slider" v-model.number="mantSkipRacePercentile" min="0" max="100" />
+                                <span class="mant-threshold-val">{{ mantSkipRacePercentile }}</span>
                               </div>
                             </div>
                           </div>
@@ -176,9 +221,9 @@
                         <label>Friendship</label>
                         <div class="mant-threshold-group">
                           <div class="mant-threshold-row">
-                            <img :src="getMantItemImg('bbq')" class="mant-threshold-img" />
+                            <img :src="getMantItemImg('grilled_carrots')" class="mant-threshold-img" />
                             <div class="mant-threshold-controls">
-                              <span class="mant-threshold-label">Number of unmaxxed cards</span>
+                              <span class="mant-threshold-label">Number of unmaxxed cards (Bumped up a tier for number above and down for every number below during training)</span>
                               <div class="mant-threshold-slider-row">
                                 <input type="range" class="hint-slider" v-model.number="mantBbqUnmaxxedCards" min="1" max="6" />
                                 <span class="mant-threshold-val">{{ mantBbqUnmaxxedCards }}</span>
@@ -2159,7 +2204,8 @@ export default {
       this.loadEventList();
     }
         this.mantItemTiers = this.mantGetDefaultTiers();
-        this.mantTierCount = 2;
+        this.mantTierCount = 6;
+        this.mantTierThresholds = {2: 50, 3: 100, 4: 150, 5: 200, 6: 250};
   },
   data: function () {
     return {
@@ -2206,29 +2252,35 @@ export default {
       mantDragItemId: null,
       mantTierCount: 2,
       mantItemIds: [
-        'speedsmall','speedmedium','speedlarge',
-        'staminasmall','staminamedium','staminalarge',
-        'powersmall','powermedium','powerlarge',
-        'gutssmall','gutsmedium','gutslarge',
-        'witsmall','witmedium','witlarge',
-        'energydrinksmall','energydrinkmedium','energydrinklarge',
-        'greenjuice','maxsmall','maxlarge','moodsmall','moodlarge',
-        'catfood','bbq',
-        'mirror','binoc','ppbook','hat',
-        'pillow','scheduler','handcream','scale','aroma','useless2','cureall',
-        'speedpet','staminapet','powerpet','gutspet','witpet','shuffle',
-        'megasmall','megamedium','megalarge',
-        'speedweights','staminaweights','powerweights','gutsweights','prayer',
-        'rb','rbex','penlight',
+        'speed_notepad','speed_manual','speed_scroll',
+        'stamina_notepad','stamina_manual','stamina_scroll',
+        'power_notepad','power_manual','power_scroll',
+        'guts_notepad','guts_manual','guts_scroll',
+        'wit_notepad','wit_manual','wit_scroll',
+        'vita_20','vita_40','vita_65',
+        'royal_kale_juice','energy_drink_max','energy_drink_max_ex','plain_cupcake','berry_sweet_cupcake',
+        'yummy_cat_food','grilled_carrots',
+        'pretty_mirror','reporters_binoculars','master_practice_guide','scholars_hat',
+        'fluffy_pillow','pocket_planner','rich_hand_cream','smart_scale','aroma_diffuser','practice_drills_dvd','miracle_cure',
+        'speed_training_application','stamina_training_application','power_training_application','guts_training_application','wit_training_application','reset_whistle',
+        'coaching_megaphone','motivating_megaphone','empowering_megaphone',
+        'speed_ankle_weights','stamina_ankle_weights','power_ankle_weights','guts_ankle_weights','good-luck_charm',
+        'artisan_cleat_hammer','master_cleat_hammer','glow_sticks',
       ],
       mantItemTiers: {},
       mantWhistleThreshold: 20,
       mantWhistleFocusSummer: true,
+      mantFocusSummerClassic: 20,
+      mantFocusSummerSenior: 10,
       mantMegaSmallThreshold: 60,
       mantMegaMediumThreshold: 70,
       mantMegaLargeThreshold: 80,
       mantTrainingWeightsThreshold: 60,
       mantBbqUnmaxxedCards: 3,
+      mantCharmThreshold: 70,
+      mantCharmFailureRate: 30,
+      mantSkipRacePercentile: 0,
+      mantTierThresholds: {2: 50, 3: 100, 4: 150, 5: 200, 6: 250},
       levelDataList: [],
       umamusumeTaskTypeList: [
         {
@@ -3411,13 +3463,38 @@ export default {
       return new URL(`../assets/img/mant_items/${id}.png`, import.meta.url).href;
     },
 
+    clearCareerData() {
+      this.axios.post('/api/clear-career-data').then(() => {
+        alert('past datapoints cleared');
+      }).catch(() => {
+        alert('failure');
+      });
+    },
+
     mantGetAllItemIds() {
       return this.mantItemIds;
     },
     mantGetDefaultTiers() {
+      const defaults = {
+        speed_notepad: 5, speed_manual: 2, speed_scroll: 2,
+        stamina_notepad: 5, stamina_manual: 2, stamina_scroll: 2,
+        power_notepad: 5, power_manual: 2, power_scroll: 2,
+        guts_notepad: 5, guts_manual: 2, guts_scroll: 2,
+        wit_notepad: 5, wit_manual: 2, wit_scroll: 2,
+        vita_20: 2, vita_40: 2, vita_65: 2,
+        royal_kale_juice: 2, energy_drink_max: 5, energy_drink_max_ex: 6,
+        plain_cupcake: 2, berry_sweet_cupcake: 3, yummy_cat_food: 6, grilled_carrots: 3,
+        pretty_mirror: 6, reporters_binoculars: 6, master_practice_guide: 6, scholars_hat: 5,
+        fluffy_pillow: 6, pocket_planner: 6, rich_hand_cream: 4, smart_scale: 6,
+        aroma_diffuser: 6, practice_drills_dvd: 6, miracle_cure: 4,
+        speed_training_application: 6, stamina_training_application: 6, power_training_application: 6, guts_training_application: 6, wit_training_application: 6,
+        reset_whistle: 1,
+        coaching_megaphone: 2, motivating_megaphone: 2, empowering_megaphone: 2,
+        speed_ankle_weights: 6, stamina_ankle_weights: 6, power_ankle_weights: 6, guts_ankle_weights: 6,
+        'good-luck_charm': 2, artisan_cleat_hammer: 2, master_cleat_hammer: 2, glow_sticks: 6,
+      };
       const t = {};
-      this.mantGetAllItemIds().forEach(id => { t[id] = 2; });
-      t['shuffle'] = 1;
+      this.mantGetAllItemIds().forEach(id => { t[id] = defaults[id] ?? 2; });
       return t;
     },
     mantGetItemsInTier(tier) {
@@ -3440,8 +3517,7 @@ export default {
       this.mantDragItemId = null;
       this.mantDragOverTier = null;
     },
-    mantMigrateLegacyTiers() {
-      // Convert old tier -1 (blacklist) and 0 (unselected) to valid numbered tiers
+    mantNormalizeTiers() {
       const ids = this.mantGetAllItemIds();
       let needsMigration = false;
       for (const id of ids) {
@@ -3482,6 +3558,7 @@ export default {
           }
         });
         this.mantTierCount--;
+        delete this.mantTierThresholds[removedTier];
       }
     },
     cancelTask: function () {
@@ -3603,11 +3680,17 @@ export default {
             "tier_count": this.mantTierCount,
             "whistle_threshold": this.mantWhistleThreshold,
             "whistle_focus_summer": this.mantWhistleFocusSummer,
+            "focus_summer_classic": this.mantFocusSummerClassic,
+            "focus_summer_senior": this.mantFocusSummerSenior,
             "mega_small_threshold": this.mantMegaSmallThreshold,
             "mega_medium_threshold": this.mantMegaMediumThreshold,
             "mega_large_threshold": this.mantMegaLargeThreshold,
             "training_weights_threshold": this.mantTrainingWeightsThreshold,
-            "bbq_unmaxxed_cards": this.mantBbqUnmaxxedCards
+            "bbq_unmaxxed_cards": this.mantBbqUnmaxxedCards,
+            "charm_threshold": this.mantCharmThreshold,
+            "charm_failure_rate": this.mantCharmFailureRate,
+            "skip_race_percentile": this.mantSkipRacePercentile,
+            "tier_thresholds": { ...this.mantTierThresholds }
           } : null
         }
       }
@@ -4025,25 +4108,37 @@ export default {
       }
       if ('mant_config' in this.presetsUse && this.presetsUse.mant_config.item_tiers) {
         this.mantItemTiers = this.presetsUse.mant_config.item_tiers;
-        this.mantTierCount = this.presetsUse.mant_config.tier_count || 2;
-        this.mantMigrateLegacyTiers();
+        this.mantTierCount = this.presetsUse.mant_config.tier_count || 6;
+        this.mantNormalizeTiers();
         this.mantWhistleThreshold = this.presetsUse.mant_config.whistle_threshold ?? 20;
         this.mantWhistleFocusSummer = this.presetsUse.mant_config.whistle_focus_summer ?? true;
+        this.mantFocusSummerClassic = this.presetsUse.mant_config.focus_summer_classic ?? 20;
+        this.mantFocusSummerSenior = this.presetsUse.mant_config.focus_summer_senior ?? 10;
         this.mantMegaSmallThreshold = this.presetsUse.mant_config.mega_small_threshold ?? 60;
         this.mantMegaMediumThreshold = this.presetsUse.mant_config.mega_medium_threshold ?? 70;
         this.mantMegaLargeThreshold = this.presetsUse.mant_config.mega_large_threshold ?? 80;
         this.mantTrainingWeightsThreshold = this.presetsUse.mant_config.training_weights_threshold ?? 60;
         this.mantBbqUnmaxxedCards = this.presetsUse.mant_config.bbq_unmaxxed_cards ?? 3;
+        this.mantCharmThreshold = this.presetsUse.mant_config.charm_threshold ?? 70;
+        this.mantCharmFailureRate = this.presetsUse.mant_config.charm_failure_rate ?? 30;
+        this.mantSkipRacePercentile = this.presetsUse.mant_config.skip_race_percentile ?? 0;
+        this.mantTierThresholds = this.presetsUse.mant_config.tier_thresholds ?? {};
       } else {
         this.mantItemTiers = this.mantGetDefaultTiers();
-        this.mantTierCount = 2;
+        this.mantTierCount = 6;
+        this.mantTierThresholds = {2: 50, 3: 100, 4: 150, 5: 200, 6: 250};
         this.mantWhistleThreshold = 20;
         this.mantWhistleFocusSummer = true;
+        this.mantFocusSummerClassic = 20;
+        this.mantFocusSummerSenior = 10;
         this.mantMegaSmallThreshold = 60;
         this.mantMegaMediumThreshold = 70;
         this.mantMegaLargeThreshold = 80;
         this.mantTrainingWeightsThreshold = 60;
         this.mantBbqUnmaxxedCards = 3;
+        this.mantCharmThreshold = 70;
+        this.mantCharmFailureRate = 30;
+        this.mantSkipRacePercentile = 0;
       }
 
     },
@@ -4207,15 +4302,21 @@ export default {
       }
       if (data.mant_config && data.mant_config.item_tiers) {
         this.mantItemTiers = data.mant_config.item_tiers;
-        this.mantTierCount = data.mant_config.tier_count || 2;
-        this.mantMigrateLegacyTiers();
+        this.mantTierCount = data.mant_config.tier_count || 6;
+        this.mantNormalizeTiers();
         this.mantWhistleThreshold = data.mant_config.whistle_threshold ?? 20;
         this.mantWhistleFocusSummer = data.mant_config.whistle_focus_summer ?? true;
+        this.mantFocusSummerClassic = data.mant_config.focus_summer_classic ?? 20;
+        this.mantFocusSummerSenior = data.mant_config.focus_summer_senior ?? 10;
         this.mantMegaSmallThreshold = data.mant_config.mega_small_threshold ?? 60;
         this.mantMegaMediumThreshold = data.mant_config.mega_medium_threshold ?? 70;
         this.mantMegaLargeThreshold = data.mant_config.mega_large_threshold ?? 80;
         this.mantTrainingWeightsThreshold = data.mant_config.training_weights_threshold ?? 60;
         this.mantBbqUnmaxxedCards = data.mant_config.bbq_unmaxxed_cards ?? 3;
+        this.mantCharmThreshold = data.mant_config.charm_threshold ?? 70;
+        this.mantCharmFailureRate = data.mant_config.charm_failure_rate ?? 30;
+        this.mantSkipRacePercentile = data.mant_config.skip_race_percentile ?? 0;
+        this.mantTierThresholds = data.mant_config.tier_thresholds ?? {};
       }
     },
     getPresets: function () {
@@ -4379,11 +4480,17 @@ export default {
           tier_count: this.mantTierCount,
           whistle_threshold: this.mantWhistleThreshold,
           whistle_focus_summer: this.mantWhistleFocusSummer,
+          focus_summer_classic: this.mantFocusSummerClassic,
+          focus_summer_senior: this.mantFocusSummerSenior,
           mega_small_threshold: this.mantMegaSmallThreshold,
           mega_medium_threshold: this.mantMegaMediumThreshold,
           mega_large_threshold: this.mantMegaLargeThreshold,
           training_weights_threshold: this.mantTrainingWeightsThreshold,
-          bbq_unmaxxed_cards: this.mantBbqUnmaxxedCards
+          bbq_unmaxxed_cards: this.mantBbqUnmaxxedCards,
+          charm_threshold: this.mantCharmThreshold,
+          charm_failure_rate: this.mantCharmFailureRate,
+          skip_race_percentile: this.mantSkipRacePercentile,
+          tier_thresholds: { ...this.mantTierThresholds }
         };
       }
       let payload = {
@@ -6170,6 +6277,31 @@ export default {
   background: rgba(59,130,246,.15);
   color: #60a5fa;
   border-right: 2px solid rgba(59,130,246,.3);
+  flex-direction: column;
+  gap: 4px;
+}
+.mant-coin-label {
+  font-size: 11px;
+  color: rgba(255,255,255,.4);
+  margin-left: auto;
+}
+.mant-coin-input {
+  width: 52px;
+  padding: 1px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 4px;
+  color: #fff;
+  outline: none;
+}
+.mant-coin-input:focus {
+  border-color: var(--accent);
+}
+.mant-coin-input::placeholder {
+  color: rgba(255,255,255,.3);
 }
 
 .mant-tier-items {

@@ -121,15 +121,8 @@ def sb_drag(ctx, from_y, to_y):
     time.sleep(0.15)
 
 
-def trigger_scrollbar(ctx):
-    y = 475 + random.randint(0, 10)
-    ctx.ctrl.execute_adb_shell("shell input swipe 30 " + str(y) + " 30 " + str(y) + " 100", True)
-    time.sleep(0.15)
-
-
 def scroll_to_top(ctx):
     for _ in range(15):
-        trigger_scrollbar(ctx)
         img = ctx.ctrl.get_screen()
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         if at_top(img_rgb):
@@ -142,7 +135,6 @@ def scroll_to_top(ctx):
 
 def scroll_to_bottom(ctx):
     for _ in range(15):
-        trigger_scrollbar(ctx)
         img = ctx.ctrl.get_screen()
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         if at_bottom(img_rgb):
@@ -199,13 +191,18 @@ def script_follow_support_card_select(ctx: UmamusumeContext):
             ctx.ctrl.swipe_and_hold(x1=350, y1=400, x2=350, y2=1000, swipe_duration=211, hold_duration=211, name="scroll up list")
             img = ctx.ctrl.get_screen()
         ctx.ctrl.click_by_point(FOLLOW_SUPPORT_CARD_SELECT_REFRESH)
-        time.sleep(1.2)
+        time.sleep(0.5)
     ctx.ctrl.click_by_point(FOLLOW_SUPPORT_CARD_SELECT_REFRESH)
 
 
 def script_cultivate_finish(ctx: UmamusumeContext):
     import bot.conn.u2_ctrl as u2c
     u2c.IN_CAREER_RUN = False
+    try:
+        from module.umamusume.persistence import clear_used_buffs
+        clear_used_buffs()
+    except Exception:
+        pass
     if not ctx.task.detail.manual_purchase_at_end:
         if not ctx.cultivate_detail.cultivate_finish:
             ctx.cultivate_detail.cultivate_finish = True
@@ -215,7 +212,9 @@ def script_cultivate_finish(ctx: UmamusumeContext):
             ctx.ctrl.click_by_point(CULTIVATE_FINISH_LEARN_SKILL)
             return
         if getattr(ctx.cultivate_detail, "final_skill_sweep_active", False):
-            if ctx.cultivate_detail.learn_skill_selected:
+            sweep_count = getattr(ctx.cultivate_detail, "final_skill_sweep_count", 0)
+            if ctx.cultivate_detail.learn_skill_selected and sweep_count < 2:
+                ctx.cultivate_detail.final_skill_sweep_count = sweep_count + 1
                 ctx.cultivate_detail.learn_skill_done = False
                 ctx.cultivate_detail.learn_skill_selected = False
                 ctx.ctrl.click_by_point(CULTIVATE_FINISH_LEARN_SKILL)
@@ -363,7 +362,6 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
     drag_ratio = 1.1
 
     scroll_to_top(ctx)
-    trigger_scrollbar(ctx)
     img = ctx.ctrl.get_screen()
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     thumb = find_thumb(img_rgb)
@@ -374,7 +372,6 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
         thumb_center = (thumb[0] + thumb[1]) // 2
         if thumb[0] > TRACK_TOP:
             sb_drag(ctx, thumb_center, TRACK_TOP)
-            trigger_scrollbar(ctx)
             img = ctx.ctrl.get_screen()
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             thumb = find_thumb(img_rgb)
@@ -386,7 +383,6 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
         shift_cal, conf_cal = find_content_shift(before_cal, after_cal)
         ratio = shift_cal / 5 if (shift_cal > 0 and conf_cal > 0.85) else 14.0
 
-        trigger_scrollbar(ctx)
         img_dr = ctx.ctrl.get_screen()
         img_dr_rgb = cv2.cvtColor(img_dr, cv2.COLOR_BGR2RGB)
         thumb_cal = find_thumb(img_dr_rgb)
@@ -394,7 +390,6 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
             cal_from = (thumb_cal[0] + thumb_cal[1]) // 2
             cal_dist = 30
             sb_drag(ctx, cal_from, cal_from + cal_dist)
-            trigger_scrollbar(ctx)
             img_dr2 = ctx.ctrl.get_screen()
             img_dr2_rgb = cv2.cvtColor(img_dr2, cv2.COLOR_BGR2RGB)
             thumb_cal2 = find_thumb(img_dr2_rgb)
@@ -405,7 +400,6 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
                     drag_ratio = cal_dist / actual_move
 
         scroll_to_top(ctx)
-        trigger_scrollbar(ctx)
         img = ctx.ctrl.get_screen()
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         thumb = find_thumb(img_rgb)
@@ -618,11 +612,10 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
                 pass_bought += prev_count - len(remaining)
                 continue
 
+            img = ctx.ctrl.get_screen()
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             if at_bottom(img_rgb):
                 break
-
-            trigger_scrollbar(ctx)
             img = ctx.ctrl.get_screen()
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             thumb = find_thumb(img_rgb)
@@ -645,6 +638,4 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
 
     ctx.cultivate_detail.learn_skill_done = True
     ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
-    if target_skill_list:
-        ctx.cultivate_detail.learn_skill_selected = True
     ctx.ctrl.click_by_point(CULTIVATE_LEARN_SKILL_CONFIRM)

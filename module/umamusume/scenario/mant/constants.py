@@ -13,7 +13,7 @@ class MantItemType(Enum):
     CAKE_LARGE = "cake_large"
     MAX_ENERGY_SMALL = "max_energy_small"
     MAX_ENERGY_MEDIUM = "max_energy_medium"
-    MAX_ENERGY_LARGE = "max_energy_large"
+    TRAINING_APPLICATION = "training_application"
     BBQ = "bbq"
     CAT_FOOD = "cat_food"
     HORSESHOE_SMALL = "horseshoe_small"
@@ -111,14 +111,14 @@ MANT_SHOP_ITEMS = {
         "efficiency": 0.20,
     },
     MantItemType.MAX_ENERGY_MEDIUM: {
-        "cost": 40,
+        "cost": 50,
         "effect": {"max_energy": 6, "energy": 10},
-        "efficiency": 0.25,
+        "efficiency": 0.20,
     },
-    MantItemType.MAX_ENERGY_LARGE: {
-        "cost": 55,
-        "effect": {"max_energy": 8, "energy": 15},
-        "efficiency": 0.18,
+    MantItemType.TRAINING_APPLICATION: {
+        "cost": 150,
+        "effect": {"facility_level": 1},
+        "efficiency": 0.30,
     },
     MantItemType.BBQ: {
         "cost": 40,
@@ -182,22 +182,22 @@ MANT_SHOP_ITEMS = {
     },
     MantItemType.HAND_MIRROR: {
         "cost": 150,
-        "effect": {"buff": "charming"},
+        "effect": {"buff": "Charming"},
         "efficiency": 0.15,
     },
     MantItemType.PRACTICE_NOTEBOOK: {
         "cost": 150,
-        "effect": {"buff": "practice_perfect"},
+        "effect": {"buff": "Practice Perfect"},
         "efficiency": 0.05,
     },
     MantItemType.SCHOLAR_HAT: {
         "cost": 280,
-        "effect": {"buff": "fast_learner"},
+        "effect": {"buff": "Fast Learner"},
         "efficiency": 0.24,
     },
     MantItemType.GLASSES: {
         "cost": 150,
-        "effect": {"buff": "hot_topic"},
+        "effect": {"buff": "Hot Topic"},
         "efficiency": 0.05,
     },
     MantItemType.PANACEA: {
@@ -289,6 +289,18 @@ MANT_FIXED_EVENTS = {
 }
 
 
+AILMENT_CURE_MAP = {
+    "Night Owl": "Fluffy Pillow",
+    "Slacker": "Pocket Planner",
+    "Skin Outbreak": "Rich Hand Cream",
+    "Slow Metabolism": "Smart Scale",
+    "Migraine": "Aroma Diffuser",
+    "Practice Poor": "Practice Drills DVD",
+}
+
+AILMENT_CURE_ALL = "Miracle Cure"
+
+
 MANT_SHOP_REFRESH_TURNS = [1, 7, 13, 19, 25, 31, 37, 43, 49, 55]
 
 
@@ -346,6 +358,6 @@ MANT_ITEM_PRIORITY = {
         MantItemType.PRACTICE_NOTEBOOK,
         MantItemType.GLASSES,
         MantItemType.MAX_ENERGY_MEDIUM,
-        MantItemType.MAX_ENERGY_LARGE,
+        MantItemType.TRAINING_APPLICATION,
     ],
 }
