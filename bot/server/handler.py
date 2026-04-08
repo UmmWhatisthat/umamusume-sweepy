@@ -272,6 +272,12 @@ def get_detected_items():
     return list(detected_items_log.values())
 
 
+@server.get("/api/detected-shop-items")
+def get_detected_shop_items():
+    from module.umamusume.context import detected_shop_items_log
+    return list(detected_shop_items_log.values())
+
+
 @server.post("/api/clear-career-data")
 def clear_career_data_endpoint():
     from module.umamusume.persistence import clear_career_data
@@ -304,6 +310,14 @@ async def get_training_icon(name: str):
         return FileResponse(file_path, media_type="image/png")
     return JSONResponse(status_code=404, content={"error": "not found"})
 
+
+
+@server.get("/race-icon/{race_id}")
+async def get_race_icon(race_id: str):
+    file_path = os.path.join("resource", "umamusume", "race", race_id + ".png")
+    if os.path.isfile(file_path):
+        return FileResponse(file_path, media_type="image/png")
+    return JSONResponse(status_code=404, content={"error": "not found"})
 
 
 @server.get("/")

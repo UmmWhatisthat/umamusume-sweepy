@@ -1,4 +1,3 @@
-import os
 import re
 import time
 import random
@@ -8,7 +7,7 @@ from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor
 
 import bot.base.log as logger
-from bot.recog.ocr import ocr
+from bot.recog.ocr import ocr, ocr_line
 from rapidfuzz import process, fuzz
 
 log = logger.get_logger(__name__)
@@ -21,9 +20,10 @@ CONTENT_X1 = 30
 CONTENT_X2 = 640
 PURCHASED_CHECK_X1 = 200
 PURCHASED_CHECK_X2 = 600
-PURCHASED_BRIGHTNESS_THRESHOLD = 180
 MANT_SHOP_SCAN_START = 13
 MANT_SHOP_SCAN_INTERVAL = 6
+
+MANT_SHOP_COIN_ROI = (394, 437, 525, 685)
 
 SHOP_OPEN_X = 412
 SHOP_OPEN_X_SUMMER = 359
@@ -37,8 +37,9 @@ TRACK_BOT = 938
 SCREEN_WIDTH = 720
 
 OCR_NAME_X1 = 135
-OCR_NAME_X2 = 560
+OCR_NAME_X2 = 690
 OCR_FUZZY_THRESHOLD = 65
+OCR_ROI_SCALE = 2.0
 
 SHOP_ITEM_NAMES = [
     "Speed Notepad", "Stamina Notepad", "Power Notepad", "Guts Notepad", "Wit Notepad",
@@ -111,7 +112,7 @@ def is_shop_scan_turn(date):
 
 
 def is_thumb(r, g, b):
-    return abs(r - 125) <= 5 and abs(g - 120) <= 5 and abs(b - 142) <= 5
+    return abs(r - 122) <= 11 and abs(g - 117) <= 11 and abs(b - 139) <= 11
 
 
 def is_track(r, g, b):
@@ -178,14 +179,12 @@ def content_same(before, after):
     return cv2.mean(diff)[0] < 3
 
 
-
-
 def sb_drag(ctx, from_y, to_y):
     sx = random.randint(SB_X_MIN, SB_X_MAX)
     ex = random.randint(SB_X_MIN, SB_X_MAX)
     dur = random.randint(166, 211)
     ctx.ctrl.execute_adb_shell(
-        "shell input swipe " + str(sx) + " " + str(from_y) + " " + str(ex) + " " + str(to_y) + " " + str(dur), True)
+        f"shell input swipe {sx} {from_y} {ex} {to_y} {dur}", True)
     time.sleep(0.15)
 
 
@@ -216,22 +215,46 @@ def is_effect_text(text):
     return any(lower.startswith(p) for p in EFFECT_PREFIXES)
 
 
-def is_purchased(frame, item_y):
-    row_y1 = max(0, int(item_y) - 20)
-    row_y2 = min(frame.shape[0], int(item_y) + 60)
-    roi = frame[row_y1:row_y2, PURCHASED_CHECK_X1:PURCHASED_CHECK_X2]
-    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    return float(cv2.mean(gray)[0]) < PURCHASED_BRIGHTNESS_THRESHOLD
+def find_shop_checkmarks(frame):
+    from module.umamusume.asset.template import REF_MANT_SHOP_CHECKMARK
+    template = cv2.imread(REF_MANT_SHOP_CHECKMARK.template_path)
+    if template is None:
+        return []
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    tmpl_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    th, tw = tmpl_gray.shape[:2]
+    result = cv2.matchTemplate(gray, tmpl_gray, cv2.TM_CCOEFF_NORMED)
+    threshold = 0.8
+    loc = np.where(result >= threshold)
+    marks = []
+    for pt in zip(*loc[::-1]):
+        cx = pt[0] + tw // 2
+        cy = pt[1] + th // 2
+        if any(abs(cx - mx) < 10 and abs(cy - my) < 10 for mx, my in marks):
+            continue
+        marks.append((cx, cy))
+    return marks
+
+
+def is_buyable(frame, item_y):
+    marks = find_shop_checkmarks(frame)
+    for mx, my in marks:
+        if abs(my - item_y) < 50:
+            return True
+    return False
 
 
 def classify_items_in_frame(frame):
     name_roi = frame[SHOP_ROI_Y1:SHOP_ROI_Y2, OCR_NAME_X1:OCR_NAME_X2]
-    raw = ocr(name_roi, lang="en")
+    name_roi_up = cv2.resize(name_roi, None, fx=OCR_ROI_SCALE, fy=OCR_ROI_SCALE,
+                             interpolation=cv2.INTER_CUBIC)
+    raw = ocr(name_roi_up, lang="en")
 
     if not raw or not raw[0]:
         return [], False
 
     items = []
+    turns_found = []
     seen_y = []
 
     for entry in raw[0]:
@@ -240,12 +263,20 @@ def classify_items_in_frame(frame):
         bbox = entry[0]
         text = entry[1][0].strip()
         conf = entry[1][1]
-        y_center = (bbox[0][1] + bbox[2][1]) / 2
+        y_center = (bbox[0][1] + bbox[2][1]) / 2 / OCR_ROI_SCALE
+
+        lower = text.lower()
+        turn_match = re.search(r'(\d+)\s*turn', lower)
+        if turn_match:
+            try:
+                turns_found.append((int(turn_match.group(1)), y_center))
+            except Exception:
+                pass
+            continue
 
         if len(text) < 4 or conf < 0.5:
             continue
-        lower = text.lower()
-        if lower in ('effect', 'cost', 'new', 'turn(s)', '6 turn(s)'):
+        if lower in ('effect', 'cost', 'new'):
             continue
         if text.replace('+', '').replace('-', '').replace(' ', '').replace('.', '').isdigit():
             continue
@@ -261,27 +292,30 @@ def classify_items_in_frame(frame):
         matched_name, match_score, _ = match
         abs_y = SHOP_ROI_Y1 + y_center
 
-        is_dup = False
-        for sy in seen_y:
-            if abs(abs_y - sy) < 40:
-                is_dup = True
-                break
-        if is_dup:
+        if any(abs(abs_y - sy) < 40 for sy in seen_y):
             continue
-
-        if is_purchased(frame, abs_y):
-            continue
-
-        items.append((matched_name, match_score, abs_y))
+        buyable = is_buyable(frame, abs_y)
+        items.append((matched_name, match_score, abs_y, y_center, buyable))
         seen_y.append(abs_y)
 
-    items.sort(key=lambda r: r[2])
-    return items, False
+    final_items = []
+    for name, score, abs_y, y_center, buyable in items:
+        best_t = 1
+        min_dist = 60
+        for t_val, ty in turns_found:
+            dist = abs(y_center - ty)
+            if dist < min_dist:
+                best_t = t_val
+                min_dist = dist
+        final_items.append((name, score, abs_y, best_t, buyable))
+
+    final_items.sort(key=lambda r: r[2])
+    return final_items, False
 
 
 def name_based_shift(by_frame, prev_fi, curr_fi):
-    prev_items = [(k, y) for k, c, y in by_frame[prev_fi]]
-    curr_items = [(k, y) for k, c, y in by_frame[curr_fi]]
+    prev_items = [(k, y) for k, c, y, t, b in by_frame[prev_fi]]
+    curr_items = [(k, y) for k, c, y, t, b in by_frame[curr_fi]]
     shifts = []
     used_curr = set()
     for pk, py in prev_items:
@@ -308,8 +342,8 @@ def name_based_shift(by_frame, prev_fi, curr_fi):
 
 def dedup_detections(all_detections, captured_frames):
     by_frame = defaultdict(list)
-    for key, conf, fi, abs_y in all_detections:
-        by_frame[fi].append((key, conf, abs_y))
+    for key, conf, fi, abs_y, turns, buyable in all_detections:
+        by_frame[fi].append((key, conf, abs_y, turns, buyable))
 
     sorted_frames = sorted(by_frame.keys())
     if not sorted_frames:
@@ -349,60 +383,90 @@ def dedup_detections(all_detections, captured_frames):
         cumulative_shift[curr_fi] = cumulative_shift[prev_fi] + content_shift
 
     global_detections = []
-    for key, conf, fi, abs_y in all_detections:
+    for key, conf, fi, abs_y, turns, buyable in all_detections:
         global_y = abs_y + cumulative_shift.get(fi, 0)
-        global_detections.append((key, conf, fi, global_y))
+        global_detections.append((key, conf, fi, global_y, turns, buyable))
 
     global_detections.sort(key=lambda d: d[3])
     position_clusters = []
-    for key, conf, fi, gy in global_detections:
+    for key, conf, fi, gy, turns, buyable in global_detections:
         placed = False
         for cluster in position_clusters:
             cluster_gy = sum(d[3] for d in cluster) / len(cluster)
             if abs(gy - cluster_gy) < 80:
-                cluster.append((key, conf, fi, gy))
+                cluster.append((key, conf, fi, gy, turns, buyable))
                 placed = True
                 break
         if not placed:
-            position_clusters.append([(key, conf, fi, gy)])
+            position_clusters.append([(key, conf, fi, gy, turns, buyable)])
 
     items_list = []
     for cluster in position_clusters:
         name_counts = Counter()
         name_best_conf = {}
-        for k, c, fi, gy in cluster:
+        turn_counts = Counter()
+        buyable_votes = Counter()
+        for k, c, fi, gy, turns, buyable in cluster:
             name_counts[k] += 1
             if k not in name_best_conf or c > name_best_conf[k]:
                 name_best_conf[k] = c
+            if turns != 99:
+                turn_counts[turns] += 1
+            buyable_votes[buyable] += 1
         winner = max(name_counts.keys(), key=lambda n: (name_counts[n], name_best_conf[n]))
+        winner_turns = turn_counts.most_common(1)[0][0] if turn_counts else 99
+        winner_buyable = buyable_votes.most_common(1)[0][0]
         avg_gy = sum(d[3] for d in cluster) / len(cluster)
-        items_list.append((winner, name_best_conf[winner], avg_gy))
+        items_list.append((winner, name_best_conf[winner], avg_gy, winner_turns, winner_buyable))
 
     items_list.sort(key=lambda x: x[2])
     return items_list
 
 
+def detect_mant_shop_coins(img):
+    from bot.recog.ocr import ocr_line
+    y1, y2, x1, x2 = MANT_SHOP_COIN_ROI
+    roi = img[y1:y2, x1:x2]
+    text = ocr_line(roi, lang="en")
+    digits = re.sub(r'[^0-9]', '', text)
+    if digits:
+        return int(digits)
+    return -1
+
+
 def scan_mant_shop(ctx):
     from module.umamusume.constants.game_constants import is_summer_camp_period
+
     current_date = getattr(ctx.cultivate_detail.turn_info, 'date', 0)
     shop_x = SHOP_OPEN_X_SUMMER if is_summer_camp_period(current_date) else SHOP_OPEN_X
+
+    from bot.recog.image_matcher import image_match
+    from module.umamusume.asset.template import REF_SHOP_MANT_CHECK
+
     ctx.ctrl.click(shop_x, SHOP_OPEN_Y, "MANT shop open")
-    time.sleep(1.5)
+    deadline = time.time() + 2.0
+    while time.time() < deadline:
+        img_check = ctx.ctrl.get_screen(to_gray=True)
+        if image_match(img_check, REF_SHOP_MANT_CHECK).find_match:
+            break
+        time.sleep(0.17)
+    else:
+        return None
 
     scroll_to_top(ctx)
     img = ctx.ctrl.get_screen()
+
+    coin_executor = None
+    coin_future = None
+    if not getattr(ctx.cultivate_detail.turn_info, 'mant_coins_read', False):
+        coin_executor = ThreadPoolExecutor(max_workers=1)
+        coin_future = coin_executor.submit(detect_mant_shop_coins, img)
+
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     thumb = find_thumb(img_rgb)
-
-    if thumb is None:
-        results, _ = classify_items_in_frame(img)
-        items_list = [(key, conf, abs_y) for key, conf, abs_y in results]
-        log.info("shop items: %s", [n for n, _, _ in items_list])
-        return items_list, 14.0, 1.1, items_list[0][2] if items_list else 0
-
-    thumb_h = thumb[1] - thumb[0]
-    thumb_center = (thumb[0] + thumb[1]) // 2
-    if thumb[0] > TRACK_TOP:
+    thumb_h = thumb[1] - thumb[0] if thumb is not None else 30
+    thumb_center = (thumb[0] + thumb[1]) // 2 if thumb else TRACK_TOP + thumb_h // 2
+    if thumb is not None and thumb[0] > TRACK_TOP:
         sb_drag(ctx, thumb_center, TRACK_TOP)
         img = ctx.ctrl.get_screen()
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -410,10 +474,11 @@ def scan_mant_shop(ctx):
         thumb_center = (thumb[0] + thumb[1]) // 2 if thumb else TRACK_TOP + thumb_h // 2
 
     before_cal = img
-    sb_drag(ctx, thumb_center, thumb_center + 5)
+    cal_px = 30
+    sb_drag(ctx, thumb_center, thumb_center + cal_px)
     after_cal = ctx.ctrl.get_screen()
     shift_cal, conf_cal = find_content_shift(before_cal, after_cal)
-    ratio = shift_cal / 5 if (shift_cal > 0 and conf_cal > 0.85) else 14.0
+    ratio = shift_cal / cal_px if (shift_cal > 0 and conf_cal > 0.85) else 14.0
 
     img_dr = ctx.ctrl.get_screen()
     img_dr_rgb = cv2.cvtColor(img_dr, cv2.COLOR_BGR2RGB)
@@ -448,12 +513,16 @@ def scan_mant_shop(ctx):
 
     first_results, _ = classify_items_in_frame(img)
     all_detections = []
+    max_kept_frames = 6
     captured_frames = {0: img.copy()}
-    for key, conf, abs_y in first_results:
-        all_detections.append((key, conf, 0, abs_y))
+    for key, conf, abs_y, turns, buyable in first_results:
+        all_detections.append((key, conf, 0, abs_y, turns, buyable))
 
     scan_x_end = _gauss_scan_x()
-    swipe_cmd = "shell input swipe " + str(SB_X) + " " + str(start_y) + " " + str(scan_x_end) + " " + str(TRACK_BOT) + " " + str(swipe_dur)
+    swipe_cmd = (
+        "shell input swipe "
+        + str(SB_X) + " " + str(start_y) + " " + str(scan_x_end) + " " + str(TRACK_BOT) + " " + str(swipe_dur)
+    )
     proc = ctx.ctrl.execute_adb_shell(swipe_cmd, False)
 
     time.sleep(0.3)
@@ -461,14 +530,17 @@ def scan_mant_shop(ctx):
     scan_deadline = time.time() + 30
     frame_idx = 1
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=1) as pool:
         futures = []
 
         while ctx.task.running() and time.time() < scan_deadline:
-            time.sleep(0.06)
+            time.sleep(0.068)
             curr = ctx.ctrl.get_screen()
             if curr is not None and not content_same(prev_frame, curr):
                 captured_frames[frame_idx] = curr.copy()
+                if len(captured_frames) > max_kept_frames:
+                    oldest = min(captured_frames)
+                    del captured_frames[oldest]
                 f = pool.submit(classify_items_in_frame, curr)
                 futures.append((frame_idx, f))
                 prev_frame = curr
@@ -485,16 +557,69 @@ def scan_mant_shop(ctx):
         final = ctx.ctrl.get_screen()
         if final is not None and not content_same(prev_frame, final):
             captured_frames[frame_idx] = final.copy()
+            if len(captured_frames) > max_kept_frames:
+                oldest = min(captured_frames)
+                del captured_frames[oldest]
             f = pool.submit(classify_items_in_frame, final)
             futures.append((frame_idx, f))
 
         for fi, f in futures:
             hits, _ = f.result()
-            for key, conf, abs_y in hits:
-                all_detections.append((key, conf, fi, abs_y))
+            for key, conf, abs_y, turns, buyable in hits:
+                all_detections.append((key, conf, fi, abs_y, turns, buyable))
+
+    time.sleep(0.2)
+    for _extra_pass in range(20):
+        extra_img = ctx.ctrl.get_screen()
+        if extra_img is None:
+            break
+        extra_rgb = cv2.cvtColor(extra_img, cv2.COLOR_BGR2RGB)
+        if at_bottom(extra_rgb):
+            if not content_same(prev_frame, extra_img):
+                captured_frames[frame_idx] = extra_img.copy()
+                if len(captured_frames) > max_kept_frames:
+                    oldest = min(captured_frames)
+                    del captured_frames[oldest]
+                hits, _ = classify_items_in_frame(extra_img)
+                for key, conf, abs_y, turns, buyable in hits:
+                    all_detections.append((key, conf, frame_idx, abs_y, turns, buyable))
+                frame_idx += 1
+            break
+        extra_thumb = find_thumb(extra_rgb)
+        if extra_thumb is None:
+            break
+        cursor = (extra_thumb[0] + extra_thumb[1]) // 2
+        step = max(extra_thumb[1] - extra_thumb[0], 30)
+        next_y = min(TRACK_BOT, cursor + step)
+        if next_y <= cursor + 3:
+            break
+        sb_drag(ctx, cursor, next_y)
+        time.sleep(0.15)
+        after_extra = ctx.ctrl.get_screen()
+        if after_extra is not None and not content_same(prev_frame, after_extra):
+            captured_frames[frame_idx] = after_extra.copy()
+            if len(captured_frames) > max_kept_frames:
+                oldest = min(captured_frames)
+                del captured_frames[oldest]
+            hits, _ = classify_items_in_frame(after_extra)
+            for key, conf, abs_y, turns, buyable in hits:
+                all_detections.append((key, conf, frame_idx, abs_y, turns, buyable))
+            prev_frame = after_extra
+            frame_idx += 1
+
+    if coin_executor is not None:
+        try:
+            coins = coin_future.result()
+            if coins == -1:
+                coins = 0
+            ctx.cultivate_detail.mant_coins = coins
+            setattr(ctx.cultivate_detail.turn_info, 'mant_coins_read', True)
+        except Exception:
+            pass
+        finally:
+            coin_executor.shutdown(wait=False)
 
     items_list = dedup_detections(all_detections, captured_frames)
-    log.info("shop items: %s", [(n, round(gy)) for n, _, gy in items_list])
 
     first_item_gy = items_list[0][2] if items_list else 0
 
@@ -521,7 +646,6 @@ EXCHANGE_CLOSE_Y = 1210
 BACK_BTN_X = 95
 BACK_BTN_Y = 1228
 
-
 RESET_BTN_X = 615
 RESET_BTN_Y = 1050
 
@@ -534,11 +658,9 @@ WEBUI_EXCLUDED_PREFIXES = (
 )
 
 
-
 def is_unbuyable(frame, item_y):
     cb_y = int(item_y) + 10
-    roi = frame[max(0, cb_y):min(frame.shape[0], cb_y + 10),
-                CHECKBOX_FILL_X1:CHECKBOX_FILL_X2]
+    roi = frame[max(0, cb_y):min(frame.shape[0], cb_y + 10), CHECKBOX_FILL_X1:CHECKBOX_FILL_X2]
     if roi.size == 0:
         return False
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
@@ -616,10 +738,12 @@ def classify_exchange_items(frame):
         if len(text) < 3 or conf < 0.4:
             continue
         lower = text.lower()
-        if lower in ('held', 'effect', 'cost', 'new', 'turn(s)', 'choose how many to use.',
-                      'close', 'confirm use', 'training items', 'confirm', 'cancel',
-                      'exchange complete', 'purchased the selected training items.',
-                      'automatically used certain training items.'):
+        if lower in (
+            'held', 'effect', 'cost', 'new', 'turn(s)', 'choose how many to use.',
+            'close', 'confirm use', 'training items', 'confirm', 'cancel',
+            'exchange complete', 'purchased the selected training items.',
+            'automatically used certain training items.',
+        ):
             continue
         if text.replace('+', '').replace('-', '').replace(' ', '').replace('.', '').replace('>', '').isdigit():
             continue
@@ -633,8 +757,7 @@ def classify_exchange_items(frame):
         if not match:
             continue
         matched_name = match[0]
-        is_dup = any(abs(abs_y - sy) < 40 for sy in seen_y)
-        if is_dup:
+        if any(abs(abs_y - sy) < 40 for sy in seen_y):
             continue
         qty = read_exchange_qty(frame, abs_y)
         if qty >= 0:
@@ -652,31 +775,44 @@ def scan_exchange_complete(ctx):
     from module.umamusume.scenario.mant.inventory import (
         inv_find_thumb, inv_at_bottom, sb_drag, INV_TRACK_TOP, INV_TRACK_BOT
     )
-    held_items = {}
+    detected_items = {}
 
     frame = ctx.ctrl.get_screen()
     items = classify_exchange_items(frame)
     for name, held, qty, y in items:
-        if held and name not in held_items:
-            held_items[name] = max(qty, 1)
+        if name not in detected_items:
+            detected_items[name] = max(qty, 1)
 
     img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     thumb = inv_find_thumb(img_rgb)
 
     if thumb:
-        for _ in range(15):
+        prev_cursor = -1
+        stall_count = 0
+        for _ in range(25):
+            thumb_h = thumb[1] - thumb[0]
             cursor = (thumb[0] + thumb[1]) // 2
-            target = min(INV_TRACK_BOT, cursor + 60)
-            if target <= cursor:
+            step = max(thumb_h, 30)
+            target = min(INV_TRACK_BOT, cursor + step)
+            if target <= cursor + 3:
                 break
+            if prev_cursor >= 0 and abs(cursor - prev_cursor) < 5:
+                stall_count += 1
+                if stall_count >= 3:
+                    break
+                target = INV_TRACK_BOT
+            else:
+                stall_count = 0
+            prev_cursor = cursor
+
             sb_drag(ctx, cursor, target)
             time.sleep(0.3)
 
             frame = ctx.ctrl.get_screen()
             items = classify_exchange_items(frame)
             for name, held, qty, y in items:
-                if held and name not in held_items:
-                    held_items[name] = max(qty, 1)
+                if name not in detected_items:
+                    detected_items[name] = max(qty, 1)
 
             img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             if inv_at_bottom(img_rgb):
@@ -685,8 +821,7 @@ def scan_exchange_complete(ctx):
             if not thumb:
                 break
 
-    log.info(f"[EXCHANGE SCAN] held items: {held_items}")
-    return held_items
+    return detected_items
 
 
 def buy_shop_items(ctx, target_names, items_list, ratio, drag_ratio, first_item_gy):
@@ -694,59 +829,50 @@ def buy_shop_items(ctx, target_names, items_list, ratio, drag_ratio, first_item_
     if not remaining:
         ctx.ctrl.click(BACK_BTN_X, BACK_BTN_Y)
         time.sleep(1)
-        return False
+        return False, {}
 
     selected = 0
-    clicked_positions = set()
 
     scroll_to_top(ctx)
 
     img = ctx.ctrl.get_screen()
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    thumb = find_thumb(img_rgb)
+    if img is None or img.size == 0:
+        return False, {}
 
-    for _ in range(80):
+    for _ in range(60):
         if not any(v > 0 for v in remaining.values()):
             break
 
         frame = ctx.ctrl.get_screen()
+        if frame is None or frame.size == 0:
+            continue
+
         results, _ = classify_items_in_frame(frame)
 
-        for item_name, conf, abs_y in results:
-            if remaining.get(item_name, 0) <= 0:
-                continue
-            pos_key = int(abs_y) // 30
-            if pos_key in clicked_positions:
-                continue
-            if is_unbuyable(frame, abs_y):
-                continue
+        name_candidates = defaultdict(list)
+        for item_name, conf, abs_y, turns, buyable in results:
+            if buyable and not is_unbuyable(frame, abs_y) and remaining.get(item_name, 0) > 0:
+                name_candidates[item_name].append((turns, abs_y))
+        for lst in name_candidates.values():
+            lst.sort()
 
-            click_y = int(abs_y) + 20
-            ctx.ctrl.click(CHECKBOX_X, click_y)
-            time.sleep(0.3)
-            selected += 1
-            remaining[item_name] -= 1
-            clicked_positions.add(pos_key)
-            log.debug(f"Checked '{item_name}' at y={abs_y:.0f}, remaining={remaining[item_name]}")
+        clicked_any = False
+        for item_name, candidates in name_candidates.items():
+            for turns, abs_y in candidates:
+                if remaining.get(item_name, 0) <= 0:
+                    break
+                click_y = int(abs_y) + 20
+                ctx.ctrl.click(CHECKBOX_X, click_y)
+                time.sleep(0.3)
+                selected += 1
+                remaining[item_name] -= 1
+                clicked_any = True
 
-        img = ctx.ctrl.get_screen()
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        if clicked_any:
+            continue
+
+        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if at_bottom(img_rgb):
-            if any(v > 0 for v in remaining.values()):
-                clicked_positions.clear()
-                frame = ctx.ctrl.get_screen()
-                results, _ = classify_items_in_frame(frame)
-                for item_name, conf, abs_y in results:
-                    if remaining.get(item_name, 0) <= 0:
-                        continue
-                    if is_unbuyable(frame, abs_y):
-                        continue
-                    click_y = int(abs_y) + 20
-                    ctx.ctrl.click(CHECKBOX_X, click_y)
-                    time.sleep(0.3)
-                    selected += 1
-                    remaining[item_name] -= 1
-                    log.debug(f"Bottom-edge: checked '{item_name}' at y={abs_y:.0f}")
             break
 
         thumb = find_thumb(img_rgb)
@@ -754,15 +880,14 @@ def buy_shop_items(ctx, target_names, items_list, ratio, drag_ratio, first_item_
             break
         cursor = (thumb[0] + thumb[1]) // 2
         th = thumb[1] - thumb[0]
-        step = max(th // 2, 10)
-        next_y = min(TRACK_BOT, cursor + step)
+        next_y = min(TRACK_BOT, cursor + max(th // 2, 10))
         if next_y <= cursor:
             break
         sb_drag(ctx, cursor, next_y)
-        time.sleep(0.2)
-        clicked_positions.clear()
 
     if selected == 0:
+        ctx.ctrl.click(BACK_BTN_X, BACK_BTN_Y)
+        time.sleep(1)
         return False, {}
 
     ctx.ctrl.click(CONFIRM_BTN_X, CONFIRM_BTN_Y)
@@ -771,10 +896,13 @@ def buy_shop_items(ctx, target_names, items_list, ratio, drag_ratio, first_item_
     from bot.recog.ocr import ocr_line
     from module.umamusume.asset.template import UI_INFO
     from module.umamusume.script.cultivate_task.info import find_similar_text
+
     exchange_ready = False
     for _ in range(40):
         time.sleep(0.3)
         screen = ctx.ctrl.get_screen(to_gray=True)
+        if screen is None or screen.size == 0:
+            continue
         result = image_match(screen, UI_INFO)
         if result.find_match:
             pos = result.matched_area
@@ -785,14 +913,10 @@ def buy_shop_items(ctx, target_names, items_list, ratio, drag_ratio, first_item_
                 exchange_ready = True
                 break
 
-    held_items = {}
-    if exchange_ready:
-        held_items = scan_exchange_complete(ctx)
-
     ctx.ctrl.click(EXCHANGE_CLOSE_X, EXCHANGE_CLOSE_Y)
     time.sleep(0.5)
 
     ctx.ctrl.click(BACK_BTN_X, BACK_BTN_Y)
     time.sleep(0.5)
 
-    return True, held_items
+    return True, {}

@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 
 import bot.base.log as logger
 
@@ -12,6 +13,9 @@ PERSIST_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'persist.json
 PERSIST_FILE = os.path.normpath(PERSIST_FILE)
 
 MAX_DATAPOINTS = 888
+
+career_cleared_flag = False
+career_data_lock = threading.Lock()
 
 
 def rebuild_percentile_history(score_history):
@@ -26,16 +30,29 @@ def rebuild_percentile_history(score_history):
 
 
 def save_career_data(ctx):
+    global career_cleared_flag
     try:
-        score_history = getattr(ctx.cultivate_detail, 'score_history', [])
-        if not score_history:
-            return
-        scores = list(score_history[-MAX_DATAPOINTS:])
-        data = {
-            'score_history': scores,
-        }
-        with open(PERSISTENCE_FILE, 'w') as f:
-            json.dump(data, f)
+        with career_data_lock:
+            if career_cleared_flag:
+                career_cleared_flag = False
+                ctx.cultivate_detail.score_history = []
+                ctx.cultivate_detail.percentile_history = []
+                log.info("Career data cleared from memory")
+                return
+            score_history = getattr(ctx.cultivate_detail, 'score_history', [])
+            if not score_history:
+                return
+            scores = score_history[-MAX_DATAPOINTS:]
+            stat_only_history = getattr(ctx.cultivate_detail, 'stat_only_history', [])
+            stat_only = stat_only_history[-MAX_DATAPOINTS:]
+            data = {
+                'score_history': scores,
+                'stat_only_history': stat_only,
+            }
+            with open(PERSISTENCE_FILE, 'w') as f:
+                json.dump(data, f)
+                f.flush()
+                os.fsync(f.fileno())
     except Exception as e:
         log.info(f"Failed to save career data: {e}")
 
@@ -47,10 +64,13 @@ def load_career_data(ctx):
         with open(PERSISTENCE_FILE, 'r') as f:
             data = json.load(f)
         score_history = data.get('score_history', [])
+        stat_only_history = data.get('stat_only_history', [])
         if not score_history:
             return False
-        scores = list(score_history[-MAX_DATAPOINTS:])
+        scores = score_history[-MAX_DATAPOINTS:]
+        stat_only = stat_only_history[-MAX_DATAPOINTS:]
         ctx.cultivate_detail.score_history = scores
+        ctx.cultivate_detail.stat_only_history = stat_only
         ctx.cultivate_detail.percentile_history = rebuild_percentile_history(scores)
         log.info(f"Restored career data: {len(scores)} datapoints")
         return True
@@ -60,12 +80,16 @@ def load_career_data(ctx):
 
 
 def clear_career_data():
+    global career_cleared_flag
     try:
-        if os.path.exists(PERSISTENCE_FILE):
-            os.remove(PERSISTENCE_FILE)
-            log.info("Career data cleared")
-            return True
-        return False
+        with career_data_lock:
+            with open(PERSISTENCE_FILE, 'w') as f:
+                json.dump({'score_history': [], 'stat_only_history': []}, f)
+                f.flush()
+                os.fsync(f.fileno())
+            career_cleared_flag = True
+        log.info("Career data cleared")
+        return True
     except Exception as e:
         log.info(f"Failed to clear career data: {e}")
         return False
@@ -110,4 +134,59 @@ def get_used_buffs():
 def clear_used_buffs():
     data = load_persist()
     data['used_buffs'] = []
+    save_persist(data)
+
+
+def get_ignore_cat_food():
+    data = load_persist()
+    return data.get('ignore_cat_food', False)
+
+
+def set_ignore_cat_food(flag=True):
+    data = load_persist()
+    data['ignore_cat_food'] = flag
+    save_persist(data)
+
+
+def clear_ignore_cat_food():
+    data = load_persist()
+    data.pop('ignore_cat_food', None)
+    save_persist(data)
+
+
+def get_ignore_grilled_carrots():
+    data = load_persist()
+    return data.get('ignore_grilled_carrots', False)
+
+
+def set_ignore_grilled_carrots(flag=True):
+    data = load_persist()
+    data['ignore_grilled_carrots'] = flag
+    save_persist(data)
+
+
+def clear_ignore_grilled_carrots():
+    data = load_persist()
+    data.pop('ignore_grilled_carrots', None)
+    save_persist(data)
+
+
+def save_megaphone_state(tier, turns):
+    data = load_persist()
+    data['megaphone_tier'] = tier
+    data['megaphone_turns'] = turns
+    save_persist(data)
+
+
+def load_megaphone_state():
+    data = load_persist()
+    tier = data.get('megaphone_tier', 0)
+    turns = data.get('megaphone_turns', 0)
+    return tier, turns
+
+
+def clear_megaphone_state():
+    data = load_persist()
+    data.pop('megaphone_tier', None)
+    data.pop('megaphone_turns', None)
     save_persist(data)

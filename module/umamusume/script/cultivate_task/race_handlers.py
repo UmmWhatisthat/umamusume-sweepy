@@ -10,10 +10,11 @@ from module.umamusume.asset.point import (
     CULTIVATE_GOAL_RACE_INTER_1, CULTIVATE_GOAL_RACE_INTER_2,
     RETURN_TO_CULTIVATE_MAIN_MENU, BEFORE_RACE_START, BEFORE_RACE_SKIP,
     BEFORE_RACE_CHANGE_TACTIC, IN_RACE_UMA_LIST_CONFIRM, IN_RACE_SKIP,
-    RACE_RESULT_CONFIRM, RACE_REWARD_CONFIRM
+    RACE_RESULT_CONFIRM, RACE_REWARD_CONFIRM, TO_TRAINING_SELECT
 )
 from module.umamusume.asset.template import (
-    REF_RACE_LIST_GOAL_RACE, REF_RACE_LIST_URA_RACE, REF_SUITABLE_RACE
+    REF_RACE_LIST, REF_RACE_LIST_GOAL_RACE, REF_RACE_LIST_URA_RACE,
+    REF_SUITABLE_RACE, REF_TRAIN_BTN
 )
 from module.umamusume.script.cultivate_task.parse import parse_date, find_race
 
@@ -22,6 +23,20 @@ log = logger.get_logger(__name__)
 
 def script_cultivate_goal_race(ctx: UmamusumeContext):
     log.info("Entering goal race function")
+
+    mant_cfg = getattr(getattr(ctx.task.detail, 'scenario_config', None), 'mant_config', None)
+    if mant_cfg is not None:
+        img_gray = cv2.cvtColor(ctx.current_screen, cv2.COLOR_BGR2GRAY)
+        train_btn_visible = image_match(img_gray, REF_TRAIN_BTN).find_match
+        if train_btn_visible:
+            if ctx.cultivate_detail.turn_info is not None:
+                ctx.cultivate_detail.mant_climax_pending_train = False
+                ctx.cultivate_detail.turn_info.parse_train_info_finish = False
+                ctx.cultivate_detail.turn_info.turn_operation = None
+            ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_MAIN_MENU)
+            ctx.ctrl.trigger_decision_reset = True
+            return
+
     img = ctx.current_screen
     current_date = parse_date(img, ctx)
     
@@ -55,15 +70,37 @@ def script_cultivate_goal_race(ctx: UmamusumeContext):
             ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_2)
         else:
             log.info(f"This is a regular race (ID: {race_id}) - entering detail interface")
+            if mant_cfg is not None and race_id == 0:
+                from module.umamusume.scenario.mant.inventory import (
+                    handle_energy_drink_max_before_race, handle_glow_sticks_before_race
+                )
+                handle_energy_drink_max_before_race(ctx)
+                handle_glow_sticks_before_race(ctx)
+                ctx.cultivate_detail.mant_climax_pending_train = True
+                ctx.cultivate_detail.turn_info.turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_RACE
+                ctx.cultivate_detail.turn_info.turn_operation.race_id = 0
             ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
     else:
         log.warning("No turn operation found - cannot determine race type")
         ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
 
 
+def try_use_cleat(ctx, race_id, is_climax=False):
+    mant_cfg = getattr(getattr(ctx.task.detail, 'scenario_config', None), 'mant_config', None)
+    if mant_cfg is None:
+        return False
+    from module.umamusume.scenario.mant.inventory import handle_cleat_before_race
+    return handle_cleat_before_race(ctx, race_id, is_climax)
+
+
 def script_cultivate_race_list(ctx: UmamusumeContext):
     log.info("Entered Race List menu (CULTIVATE_RACE_LIST)")
-    time.sleep(1.0)
+    deadline = time.time() + 6.0
+    while time.time() < deadline:
+        img_check = ctx.ctrl.get_screen(to_gray=True)
+        if image_match(img_check, REF_RACE_LIST).find_match:
+            break
+        time.sleep(0.17)
     if ctx.cultivate_detail.turn_info is None:
         log.warning("Turn information not initialized")
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_MAIN_MENU)
@@ -83,6 +120,7 @@ def script_cultivate_race_list(ctx: UmamusumeContext):
             
             if suitable_match.find_match:
                 log.info("Found suitable race")
+                try_use_cleat(ctx, race_id, is_climax=True)
                 center_x = suitable_match.center_point[0]
                 center_y = suitable_match.center_point[1]
                 ctx.ctrl.click(center_x, center_y, "Suitable race")
@@ -105,9 +143,11 @@ def script_cultivate_race_list(ctx: UmamusumeContext):
     
     if goal_match:
         log.info("Found Goal Race - clicking to enter detail interface")
+        try_use_cleat(ctx, getattr(turn_op, 'race_id', 0) if turn_op else 0)
         ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
     elif ura_match:
         log.info("Found URA Race - clicking to enter detail interface")
+        try_use_cleat(ctx, getattr(turn_op, 'race_id', 0) if turn_op else 0)
         ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
     else:
         if ctx.cultivate_detail.turn_info.turn_operation is None:
@@ -121,12 +161,30 @@ def script_cultivate_race_list(ctx: UmamusumeContext):
                 log.info(f"Race operation with ID: {race_id}")
                 if race_id in [2381, 2382, 2385, 2386, 2387] or race_id == 0:
                     log.info("Detected URA race operation - clicking race button directly")
+                    try_use_cleat(ctx, race_id, is_climax=(race_id == 0))
                     ctx.ctrl.click(319, 1082, "URA Race Button")
                     time.sleep(0.4)
                     return
         if ctx.cultivate_detail.turn_info.turn_operation.turn_operation_type == TurnOperationType.TURN_OPERATION_TYPE_RACE:
+            race_id_up = ctx.cultivate_detail.turn_info.turn_operation.race_id
+            scroll_up_deadline = time.time() + 1.0
+            while time.time() < scroll_up_deadline:
+                img_up = ctx.ctrl.get_screen()
+                selected_up = find_race(ctx, img_up, race_id_up)
+                if selected_up:
+                    try_use_cleat(ctx, race_id_up)
+                    time.sleep(0.58)
+                    ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
+                    time.sleep(0.58)
+                    return
+                ctx.ctrl.swipe(x1=340, y1=741, x2=347, y2=898, duration=580, name="")
+                time.sleep(0.58)
+
             swiped = False
-            while True:
+            scroll_attempts = 0
+            max_scroll_attempts = 50
+            while scroll_attempts < max_scroll_attempts:
+                scroll_attempts += 1
                 img = cv2.cvtColor(ctx.ctrl.get_screen(), cv2.COLOR_BGR2RGB)
                 if not compare_color_equal(img[705, 701], [211, 209, 219]):
                     if swiped is True:
@@ -152,9 +210,6 @@ def script_cultivate_race_list(ctx: UmamusumeContext):
                     ctx.cultivate_detail.turn_info.turn_operation = None
                     if hasattr(ti, 'race_search_started_at'):
                         delattr(ti, 'race_search_started_at')
-                    if hasattr(ti, 'race_search_id'):
-                        delattr(ti, 'race_search_id')
-                    ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_MAIN_MENU)
                     return
                 race_id = ctx.cultivate_detail.turn_info.turn_operation.race_id
                 log.info(f"Looking for race ID: {race_id}")
@@ -165,26 +220,22 @@ def script_cultivate_race_list(ctx: UmamusumeContext):
                         delattr(ti, 'race_search_started_at')
                     if hasattr(ti, 'race_search_id'):
                         delattr(ti, 'race_search_id')
+                    if hasattr(ti, 'race_search_retried'):
+                        delattr(ti, 'race_search_retried')
+                    try_use_cleat(ctx, race_id)
                     time.sleep(0.58)
                     ctx.ctrl.click_by_point(CULTIVATE_GOAL_RACE_INTER_1)
                     time.sleep(0.58)
                     return
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                 if not compare_color_equal(img[1006, 701], [211, 209, 219]):
-                    try:
-                        if getattr(ctx.task.detail, 'extra_race_list', None) is ctx.cultivate_detail.extra_race_list:
-                            ctx.cultivate_detail.extra_race_list = list(ctx.cultivate_detail.extra_race_list)
-                        if race_id and race_id in ctx.cultivate_detail.extra_race_list:
-                            ctx.cultivate_detail.extra_race_list.remove(race_id)
-                    except Exception as e:
-                        log.debug(f"fail2: {e}")
-                    ctx.cultivate_detail.turn_info.turn_operation = None
-                    if hasattr(ti, 'race_search_started_at'):
-                        delattr(ti, 'race_search_started_at')
-                    if hasattr(ti, 'race_search_id'):
-                        delattr(ti, 'race_search_id')
-                    ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_MAIN_MENU)
-                    return
+                    log.info(f"Bottom reached")
+                    spam_deadline = time.time() + 3.7
+                    while time.time() < spam_deadline:
+                        ctx.ctrl.swipe(x1=20, y1=850, x2=20, y2=1000, duration=1000, name="")
+                        time.sleep(0.17)
+                    time.sleep(0.3)
+                    img = ctx.ctrl.get_screen()
                 ctx.ctrl.swipe(x1=20, y1=1000, x2=20, y2=850, duration=1000, name="")
                 time.sleep(0.58)
                 img = ctx.ctrl.get_screen()
@@ -230,6 +281,7 @@ def script_cultivate_before_race(ctx: UmamusumeContext):
     if p_check_skip[0] < 200 and p_check_skip[1] < 200 and p_check_skip[2] < 200:
         ctx.ctrl.click_by_point(BEFORE_RACE_START)
     else:
+        ctx.cultivate_detail.mant_cleat_used = False
         ctx.ctrl.click_by_point(BEFORE_RACE_SKIP)
 
 

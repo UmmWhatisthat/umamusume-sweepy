@@ -1,8 +1,11 @@
 import csv
 import os.path
 
+from bot.base.common import ImageMatchConfig
 from bot.base.resource import Template
 from module.umamusume.asset import REF_SUITABLE_RACE
+
+RACE_TEMPLATE_MATCH_ACCURACY = 0.71
 
 RACE_LIST: dict[int, list] = {}
 UMAMUSUME_RACE_TEMPLATE_PATH = "/umamusume/race"
@@ -15,7 +18,11 @@ def load_race_data():
             race_id = row[1]
             path = "resource" + UMAMUSUME_RACE_TEMPLATE_PATH + "/" + str(race_id)+".png"
             if os.path.isfile(path):
-                t = Template(str(race_id), UMAMUSUME_RACE_TEMPLATE_PATH)
+                t = Template(
+                    str(race_id),
+                    UMAMUSUME_RACE_TEMPLATE_PATH,
+                    ImageMatchConfig(match_accuracy=RACE_TEMPLATE_MATCH_ACCURACY),
+                )
                 race_name = row[3]
                 race_info = [race_id, race_name, t]
                 RACE_LIST[int(race_id)] = race_info
@@ -50,3 +57,23 @@ def load_period_mapping():
                 PERIOD_TO_RACES[time_period].append(race_id)
 
 load_period_mapping()
+
+
+RACE_GRADE = {}
+
+def load_race_grades():
+    global RACE_GRADE
+    RACE_GRADE.clear()
+    with open('resource/umamusume/data/race.csv', 'r', encoding="utf-8") as file:
+        reader = csv.reader(file)
+        for row in reader:
+            if len(row) >= 6:
+                race_id = int(row[1])
+                grade = row[5].strip()
+                if grade:
+                    RACE_GRADE[race_id] = grade
+
+def is_g1_race(race_id):
+    return RACE_GRADE.get(race_id, '') == 'G1'
+
+load_race_grades()

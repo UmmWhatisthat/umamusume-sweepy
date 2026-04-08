@@ -73,7 +73,7 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
         mood_threshold = ctx.cultivate_detail.motivation_threshold_year2
     else:
         mood_threshold = ctx.cultivate_detail.motivation_threshold_year3
-        
+
     mant_skip_fast_path = False
     try:
         if ctx.cultivate_detail.scenario.scenario_type() == ScenarioType.SCENARIO_TYPE_MANT:
@@ -132,8 +132,8 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
                                 energy_below = energy <= energy_threshold
                                 
                                 log.info(f"PAL outing check - Stage {stage}:")
-                                log.info(f"Mood: {mood_val} vs {mood_threshold} - {'<=' if mood_below else '>'}")
-                                log.info(f"Energy: {energy} vs {energy_threshold} - {'<=' if energy_below else '>'}")
+                                log.info(f"Mood: {mood_val} vs {mood_threshold} - {'<=' if mood_below else '>'}") 
+                                log.info(f"Energy: {energy} vs {energy_threshold} - {'<=' if energy_below else '>'}") 
                                 
                                 if mood_below and energy_below:
                                     log.info("Both conditions met - using pal outing instead of rest")
@@ -141,9 +141,34 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
                                     return turn_operation
             except Exception:
                 pass
-        log.info(f"rest threshold: energy={energy}, threshold={limit} - prioritizing rest")
-        turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_REST
-        return turn_operation
+        if ctx.cultivate_detail.debut_race_win:
+            turn_info = ctx.cultivate_detail.turn_info
+            date = turn_info.date
+            from module.umamusume.asset.race_data import get_races_for_period
+            available_races = get_races_for_period(date)
+            extra_race_this_turn = [r for r in ctx.cultivate_detail.extra_race_list if r in available_races]
+            if extra_race_this_turn:
+                skip_race = False
+                try:
+                    if ctx.cultivate_detail.scenario.scenario_type() == ScenarioType.SCENARIO_TYPE_MANT:
+                        from module.umamusume.scenario.mant.inventory import should_skip_race
+                        skip_race = should_skip_race(ctx)
+                except Exception:
+                    pass
+                if not skip_race:
+                    pass
+                else:
+                    log.info(f"rest threshold: energy={energy}, threshold={limit} - prioritizing rest")
+                    turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_REST
+                    return turn_operation
+            else:
+                log.info(f"rest threshold: energy={energy}, threshold={limit} - prioritizing rest")
+                turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_REST
+                return turn_operation
+        else:
+            log.info(f"rest threshold: energy={energy}, threshold={limit} - prioritizing rest")
+            turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_REST
+            return turn_operation
 
     cached_screen = getattr(ctx, 'current_screen_gray', None)
     if cached_screen is None and ctx.current_screen is not None:
@@ -178,6 +203,12 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
             ctype = getattr(sc, "card_type", SupportCardType.SUPPORT_CARD_TYPE_UNKNOWN)
             if ctype == SupportCardType.SUPPORT_CARD_TYPE_NPC:
                 score += 0.05
+                continue
+            if ctype == SupportCardType.SUPPORT_CARD_TYPE_GROUP:
+                if favor == SupportCardFavorLevel.SUPPORT_CARD_FAVOR_LEVEL_1:
+                    score += w_lv1
+                elif favor == SupportCardFavorLevel.SUPPORT_CARD_FAVOR_LEVEL_2:
+                    score += w_lv2
                 continue
             if ctype == SupportCardType.SUPPORT_CARD_TYPE_UNKNOWN:
                 continue
@@ -256,14 +287,14 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
                                         thresholds = pal_thresholds[stage - 1]
                                         mood_threshold = thresholds[0]
                                         energy_threshold = thresholds[1]
-                                        
+
                                         mood_below = mood_val <= mood_threshold
                                         energy_below = energy <= energy_threshold
-                                        
+
                                         log.info(f"PAL outing check - Stage {stage}:")
                                         log.info(f"Mood: {mood_val} vs {mood_threshold} - {'<=' if mood_below else '>'}")
                                         log.info(f"Energy: {energy} vs {energy_threshold} - {'<=' if energy_below else '>'}")
-                                        
+
                                         if mood_below and energy_below:
                                             log.info("Both conditions met - using pal outing instead of rest")
                                             turn_operation.turn_operation_type = TurnOperationType.TURN_OPERATION_TYPE_TRIP
@@ -342,7 +373,7 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
 
     rest = False
     pal_outing_available = False
-    if energy <= limit:
+    if energy <= limit and not mant_skip_fast_path:
         if trip and limit < 90 and energy > 26:
             rest = False
         elif getattr(ctx.cultivate_detail, 'prioritize_recreation', False) and ctx.cultivate_detail.pal_event_stage > 0:
@@ -358,14 +389,14 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
                                 thresholds = pal_thresholds[stage - 1]
                                 mood_threshold = thresholds[0]
                                 energy_threshold = thresholds[1]
-                                
+
                                 mood_below = mood_val <= mood_threshold
                                 energy_below = energy <= energy_threshold
-                                
+
                                 log.info(f"PAL outing check - Stage {stage}:")
                                 log.info(f"Mood: {mood_val} vs {mood_threshold} - {'<=' if mood_below else '>'}")
                                 log.info(f"Energy: {energy} vs {energy_threshold} - {'<=' if energy_below else '>'}")
-                                
+
                                 if mood_below and energy_below:
                                     log.info("Both conditions met - using pal outing instead of rest")
                                     pal_outing_available = True
@@ -385,7 +416,7 @@ def get_operation(ctx: UmamusumeContext) -> TurnOperation | None:
                 rest = True
         else:
             rest = True
-    elif (ctx.cultivate_detail.turn_info.date == 36 or ctx.cultivate_detail.turn_info.date == 60) and energy < ENERGY_REST_EXTRA_DAY:
+    elif (ctx.cultivate_detail.turn_info.date == 36 or ctx.cultivate_detail.turn_info.date == 60) and energy < ENERGY_REST_EXTRA_DAY and not mant_skip_fast_path:
         rest = True
 
     expect_operation_type = TurnOperationType.TURN_OPERATION_TYPE_UNKNOWN

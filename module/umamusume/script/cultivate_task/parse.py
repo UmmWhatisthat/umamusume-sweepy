@@ -234,6 +234,10 @@ def parse_date(img, ctx: UmamusumeContext) -> int:
                 year_text = text
 
         if year_text == "":
+            VALID_YEAR_KEYWORDS = ('junior', 'classic', 'senior', 'finals', 'finale')
+            date_lower = date_text.lower()
+            if not any(kw in date_lower for kw in VALID_YEAR_KEYWORDS):
+                return -1
             year_text = find_similar_text(date_text, DATE_YEAR)
             log.info(f"Similar text found: '{year_text}'")
 
@@ -285,6 +289,9 @@ def parse_date(img, ctx: UmamusumeContext) -> int:
         # Debug: Log the extracted date text for URA
         log.info(f"URA Extracted date text: '{date_text}'")
         
+        if "Climax" in date_text or "TS Climax" in date_text:
+            return 73
+
         # Special handling for "Finale Season" in URA championship
         if "Finale Season" in date_text or "Finale" in date_text:
             log.info("URA Finale Season detected - checking championship phase")
@@ -316,6 +323,10 @@ def parse_date(img, ctx: UmamusumeContext) -> int:
                 year_text = text
 
         if year_text == "":
+            VALID_YEAR_KEYWORDS = ('junior', 'classic', 'senior', 'finals', 'finale')
+            date_lower = date_text.lower()
+            if not any(kw in date_lower for kw in VALID_YEAR_KEYWORDS):
+                return -1
             year_text = find_similar_text(date_text, DATE_YEAR)
             log.info(f"URA Similar text found: '{year_text}'")
 
@@ -617,8 +628,7 @@ def find_support_card(ctx: UmamusumeContext, img):
             s = SequenceMatcher(None, support_card_text, ctx.cultivate_detail.follow_support_card_name)
             if s.ratio() > 0.7:
                 ctx.ctrl.click(match_result.center_point[0], match_result.center_point[1] - 75,
-                               "" + ctx.cultivate_detail.follow_support_card_name + "<" + str(
-                                   support_card_level) + ">")
+                               f"{ctx.cultivate_detail.follow_support_card_name}<{support_card_level}>")
                 return True
         else:
             break
@@ -631,9 +641,9 @@ def parse_cultivate_event(ctx: UmamusumeContext, img) -> tuple[str, list[int]]:
         cached = _parse_event_cache.get(img_hash)
         if cached is not None:
             return cached
-    
+
     event_name_img = img[237:283, 111:480]
-    
+
     name_hash = _compute_image_hash(event_name_img)
     if name_hash:
         cached_name = _ocr_cache.get(name_hash)
@@ -644,14 +654,12 @@ def parse_cultivate_event(ctx: UmamusumeContext, img) -> tuple[str, list[int]]:
             _ocr_cache.set(name_hash, event_name)
     else:
         event_name = ocr_line(event_name_img)
-    
+
     if not isinstance(event_name, str) or len(event_name.strip()) <= 1:
         if img_hash:
             _parse_event_cache.set(img_hash, ("", []))
         return "", []
-    
-    event_selector_list = []
-    
+
     gray_hash = _compute_image_hash(img) if img_hash else None
     if gray_hash:
         cached_gray = _gray_image_cache.get(gray_hash)
@@ -662,76 +670,37 @@ def parse_cultivate_event(ctx: UmamusumeContext, img) -> tuple[str, list[int]]:
             _gray_image_cache.set(gray_hash, img_gray)
     else:
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    img_temp = img_gray.copy()
-    iterations = 0
-    while iterations < 20:
-        iterations += 1
-        match_result = image_match(img_temp, REF_SELECTOR)
-        if match_result.find_match:
-            event_selector_list.append(match_result.center_point)
-            img_temp[match_result.matched_area[0][1]:match_result.matched_area[1][1],
-                     match_result.matched_area[0][0]:match_result.matched_area[1][0]] = 0
-            img_temp = img_temp.copy()
-        else:
-            break
-    
-    if len(event_selector_list) == 0:
-        log.warning(f"REF_SELECTOR template failed for event '{event_name}', trying individual dialogue templates")
-        
-        from module.umamusume.asset.template import Template, UMAMUSUME_REF_TEMPLATE_PATH
-        dialogue_templates = []
-        
-        try:
-            dialogue_templates = [
-                Template("dialogue1", UMAMUSUME_REF_TEMPLATE_PATH),
-                Template("dialogue2", UMAMUSUME_REF_TEMPLATE_PATH),
-                Template("dialogue3", UMAMUSUME_REF_TEMPLATE_PATH),
-                Template("dialogue4", UMAMUSUME_REF_TEMPLATE_PATH),
-                Template("dialogue5", UMAMUSUME_REF_TEMPLATE_PATH)
-            ]
-        except:
-            log.warning("Could not load dialogue templates")
-        
-        x1, y1, x2, y2 = 24, 316, 696, 936
-        h, w = img_gray.shape[:2]
-        x1 = max(0, min(w, x1)); x2 = max(x1, min(w, x2)); y1 = max(0, min(h, y1)); y2 = max(y1, min(h, y2))
-        search_img = img_gray[y1:y2, x1:x2].copy()
-        
-        def append_unique_point(points, pt, y_thresh=28, x_thresh=100):
-            for qx, qy in points:
-                if abs(qy - pt[1]) <= y_thresh and abs(qx - pt[0]) <= x_thresh:
-                    return
-            points.append(pt)
-        
-        for template in dialogue_templates:
-            try:
-                iterations = 0
-                while iterations < 10:
-                    iterations += 1
-                    match_result = image_match(search_img, template)
-                    if match_result.find_match:
-                        abs_pt = (match_result.center_point[0] + x1, match_result.center_point[1] + y1)
-                        append_unique_point(event_selector_list, abs_pt)
-                        y0, y1m = match_result.matched_area[0][1], match_result.matched_area[1][1]
-                        x0, x1m = match_result.matched_area[0][0], match_result.matched_area[1][0]
-                        search_img[y0:y1m, x0:x1m] = 0
-                    else:
-                        break
-            except Exception:
-                continue
-        
-        if len(event_selector_list) > 1:
-            deduped = []
-            for pt in sorted(event_selector_list, key=lambda p: p[1]):
-                if not deduped or (abs(deduped[-1][1] - pt[1]) > 20 or abs(deduped[-1][0] - pt[0]) > 80):
-                    deduped.append(pt)
-            event_selector_list = deduped[:5]
-        
-        if len(event_selector_list) == 0:
-            return event_name, []
-    
-    event_selector_list.sort(key=lambda x: x[1])
+
+    x1, y1, x2, y2 = 24, 316, 696, 936
+    h, w = img_gray.shape[:2]
+    x1 = max(0, min(w, x1)); x2 = max(x1, min(w, x2)); y1 = max(0, min(h, y1)); y2 = max(y1, min(h, y2))
+    search_img = img_gray[y1:y2, x1:x2].copy()
+
+    all_points = []
+
+    for template in REF_DIALOGUE_SELECTOR:
+        img_temp = search_img.copy()
+        for _ in range(20):
+            match_result = image_match(img_temp, template)
+            if not match_result.find_match:
+                break
+            abs_pt = (match_result.center_point[0] + x1, match_result.center_point[1] + y1)
+            all_points.append(abs_pt)
+            m = match_result.matched_area
+            img_temp[m[0][1]:m[1][1], m[0][0]:m[1][0]] = 0
+
+    if len(all_points) == 0:
+        if img_hash:
+            _parse_event_cache.set(img_hash, (event_name, []))
+        return event_name, []
+
+    all_points.sort(key=lambda p: p[1])
+    event_selector_list = [all_points[0]]
+    for pt in all_points[1:]:
+        if abs(pt[1] - event_selector_list[-1][1]) > 20 or abs(pt[0] - event_selector_list[-1][0]) > 80:
+            event_selector_list.append(pt)
+
+    event_selector_list = event_selector_list[:5]
     result = (event_name, event_selector_list)
     if img_hash:
         _parse_event_cache.set(img_hash, result)
@@ -760,10 +729,10 @@ def find_race(ctx: UmamusumeContext, img, race_id: int = 0) -> bool:
         pos = match_result.matched_area
         pos_center = match_result.center_point
         if 685 < pos_center[1] < 1110:
-            y1 = max(0, pos[0][1] - 120)
-            y2 = min(img_height, pos[1][1] + 60)
-            x1 = max(0, pos[0][0] - 250)
-            x2 = min(img_width, pos[1][0] + 400)
+            y1 = max(0, pos[0][1] - 135)
+            y2 = min(img_height, pos[1][1] + 75)
+            x1 = max(0, pos[0][0] - 270)
+            x2 = min(img_width, pos[1][0] + 420)
             race_name_img = img[y1:y2, x1:x2]
 
             if race_name_img.shape[0] > 0 and race_name_img.shape[1] > 0:
@@ -775,7 +744,7 @@ def find_race(ctx: UmamusumeContext, img, race_id: int = 0) -> bool:
                     if template_match_result.find_match:
                         log.info(f"Race {race_id} matched")
                         ctx.ctrl.click(pos_center[0], pos_center[1],
-                                       "Select race: " + str(RACE_LIST[race_id][1]))
+                                       f"Select race: {RACE_LIST[race_id][1]}")
                         return True
 
         img[pos[0][1]:pos[1][1], pos[0][0]:pos[1][0]] = 0
@@ -871,7 +840,7 @@ def find_skill(ctx: UmamusumeContext, img, skill: list[str], learn_any_skill: bo
                             if pt >= skill_pt_cost:
                                 log.info(f"Buying skill '{detected_text}' - Points: {pt}, Cost: {skill_pt_cost}")
                                 ctx.ctrl.click(match_result.center_point[0] + 128, match_result.center_point[1],
-                                               "Bonus Skills" + detected_text)
+                                               f"Bonus Skills{detected_text}")
                                 if target_match is not None and target_match in skill:
                                     skill.remove(target_match)
                                     log.info(f"Removed '{target_match}' from skill list. Remaining: {skill}")

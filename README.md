@@ -1,8 +1,14 @@
+<img width="224" height="101" alt="image" src="https://github.com/user-attachments/assets/864febfc-aa47-4b9f-99c9-2b88d55f2281" />       
+
+this event is scripted btw. the numbers aren't adding up with what I'm scraping.       
+
+turn auto use items on for mant 
+also significantly reduced progress for a bit gonna go map out all the event response for dumper 
 # Sweepy — /vg/'s Uma Musume Bot (UAT REHASHED)
 
 ### A umamusume bot that handles all aspects of gameplay including training, races, events, skill purchasing, and starting runs. 
 
-If anyone has time to kill you can help to verify and screenshot cases where the stat gain detection detects wrongly (emulator resolution) so I can fine-tune the model. The training images I used were quite limited so I'm not 100% sure it works 100% of the time.
+MANT is very far from being complete but it is functional rn and is prob better for parent farming compared to aoharu. The item usage isn't quite there yet but I need people to stress test the groundwork of MANT first (item purchase, inventory detection, using items) only then can I start finetuning the logic
 
 ![Uma Musume Auto Trainer](docs/main.png)
 
@@ -35,6 +41,7 @@ If anyone has time to kill you can help to verify and screenshot cases where the
 ### Scenario Support
 - URA Finals scenario
 - Unity Cup (Aoharu)
+- partial Mant
 
 ### Comprehensive Customization
 - Literally everything that can be detected is detected and used for customization.
@@ -102,9 +109,9 @@ Alternatively, run `start.bat` to launch the bot.
 
 ## Configuration
 
-1. Set graphics to `Standard` in-game (not `Basic`)
-2. Manually select your Uma Musume, Legacy Uma, and Support Cards before starting
-
+1. Set graphics to `Standard` in-game (not `Basic`).    
+2. Manually select your Uma Musume, Legacy Uma, and Support Cards before starting.    
+3. Edit your runtime in main.py (default is 20 hours a day).     
 ---
 
 ## Stat Caps Guide
@@ -190,6 +197,10 @@ Install or reinstall Visual C++ Redistributable:
 ---
 
 ## Changelog
+### 2025-03-24
+- MANT skeleton      
+- Status effects like slow meta/charming now contributes to decisionmaking    
+
 ### 2025-03-4
 - Option to boost friendship contrib of certain cards     
 - A bunch more stuff i dont remeber i forgot to update this          
@@ -349,3 +360,5 @@ Install or reinstall Visual C++ Redistributable:
 <img width="190" height="140" alt="image" src="https://github.com/user-attachments/assets/3bdd80ec-cb77-4637-9f61-e3f8fab8d85d" />
 <img width="235" height="226" alt="image" src="https://github.com/user-attachments/assets/ffb9960a-347d-4d7f-8c0d-57ff96f72b6a" />
 <img width="317" height="317" alt="image" src="https://github.com/user-attachments/assets/61c4c0dd-85bc-4517-84c1-021fcf5d47fa" />
+<img width="428" height="605" alt="image" src="https://github.com/user-attachments/assets/07ca8a7f-3f89-4667-a5c6-d50ab5b10fe3" />
+

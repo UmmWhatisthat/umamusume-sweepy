@@ -1,5 +1,6 @@
 import cv2
 import random
+import time
 
 import bot.base.log as logger
 from bot.recog.ocr import ocr_line
@@ -13,10 +14,43 @@ from module.umamusume.asset.point import (
 log = logger.get_logger(__name__)
 
 
+def has_home_coin(ctx):
+    try:
+        img = ctx.current_screen
+        if img is None:
+            return False
+        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        from module.umamusume.asset.template import REF_HOME_COIN
+        coin_match = image_match(img_gray, REF_HOME_COIN)
+        return coin_match.find_match
+    except Exception:
+        return False
+
+
 def script_not_found_ui(ctx: UmamusumeContext):
     if ctx.current_screen is not None:
         log.debug(f"NOT_FOUND_UI - Screen shape: {ctx.current_screen.shape}")
-        
+
+        if has_home_coin(ctx):
+            return
+
+        try:
+            from module.umamusume.asset.template import REF_NEXT, REF_NEXT2
+            img_gray_full = getattr(ctx, 'current_screen_gray', None)
+            if img_gray_full is None:
+                img_gray_full = cv2.cvtColor(ctx.current_screen, cv2.COLOR_BGR2GRAY)
+            next_match = image_match(img_gray_full, REF_NEXT)
+            if next_match.find_match:
+                ctx.ctrl.click(next_match.center_point[0], next_match.center_point[1], "REF_NEXT")
+                return
+            next2_match = image_match(img_gray_full, REF_NEXT2)
+            if next2_match.find_match:
+                ctx.ctrl.click(next2_match.center_point[0], next2_match.center_point[1], "REF_NEXT2")
+                return
+        except Exception:
+            pass
+
         try:
             from module.umamusume.asset.template import UI_CULTIVATE_RACE_LIST_2
             img_gray_full = getattr(ctx, 'current_screen_gray', None)
@@ -97,15 +131,39 @@ def script_not_found_ui(ctx: UmamusumeContext):
                 log.info(f"Fallback goal screen detected: '{combined_text[:50]}...'")
                 
                 if any(word in combined_text for word in ['complete', 'achieved']):
-                    log.info(f"Goal Achieved detected - clicking confirmation")
+                    try:
+                        from module.umamusume.asset.template import REF_NEXT
+                        img_full = getattr(ctx, 'current_screen_gray', None) or cv2.cvtColor(ctx.current_screen, cv2.COLOR_BGR2GRAY)
+                        next_match = image_match(img_full, REF_NEXT)
+                        if next_match.find_match:
+                            ctx.ctrl.click(next_match.center_point[0], next_match.center_point[1], "REF_NEXT")
+                            return
+                    except Exception:
+                        pass
                     ctx.ctrl.click_by_point(GOAL_ACHIEVE_CONFIRM)
                     return
                 elif any(word in combined_text for word in ['failed']):
-                    log.info(f"Goal Failed detected - clicking confirmation")
+                    try:
+                        from module.umamusume.asset.template import REF_NEXT
+                        img_full = getattr(ctx, 'current_screen_gray', None) or cv2.cvtColor(ctx.current_screen, cv2.COLOR_BGR2GRAY)
+                        next_match = image_match(img_full, REF_NEXT)
+                        if next_match.find_match:
+                            ctx.ctrl.click(next_match.center_point[0], next_match.center_point[1], "REF_NEXT")
+                            return
+                    except Exception:
+                        pass
                     ctx.ctrl.click_by_point(GOAL_FAIL_CONFIRM)
                     return
                 elif any(word in combined_text for word in ['next']):
-                    log.info(f"Next Goal detected - clicking confirmation")
+                    try:
+                        from module.umamusume.asset.template import REF_NEXT
+                        img_full = getattr(ctx, 'current_screen_gray', None) or cv2.cvtColor(ctx.current_screen, cv2.COLOR_BGR2GRAY)
+                        next_match = image_match(img_full, REF_NEXT)
+                        if next_match.find_match:
+                            ctx.ctrl.click(next_match.center_point[0], next_match.center_point[1], "REF_NEXT")
+                            return
+                    except Exception:
+                        pass
                     ctx.ctrl.click_by_point(NEXT_GOAL_CONFIRM)
                     return
                 else:

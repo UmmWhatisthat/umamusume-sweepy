@@ -45,7 +45,7 @@ def _gauss_scan_x():
 
 
 def is_thumb(r, g, b):
-    return abs(r - 125) <= 5 and abs(g - 120) <= 5 and abs(b - 142) <= 5
+    return abs(r - 122) <= 11 and abs(g - 117) <= 11 and abs(b - 139) <= 11
 
 
 def is_track(r, g, b):
@@ -145,13 +145,6 @@ def scroll_to_bottom(ctx):
         sb_drag(ctx, (thumb[0] + thumb[1]) // 2, TRACK_BOT)
 
 
-def scroll_down_step(ctx):
-    sx = 360 + random.randint(-8, 8)
-    ctx.ctrl.execute_adb_shell(
-        "shell input swipe " + str(sx) + " 850 " + str(sx) + " 500 200", True)
-    time.sleep(0.25)
-
-
 def script_follow_support_card_select(ctx: UmamusumeContext):
     cycles = 18
     for _ in range(cycles):
@@ -199,8 +192,9 @@ def script_cultivate_finish(ctx: UmamusumeContext):
     import bot.conn.u2_ctrl as u2c
     u2c.IN_CAREER_RUN = False
     try:
-        from module.umamusume.persistence import clear_used_buffs
+        from module.umamusume.persistence import clear_used_buffs, clear_megaphone_state
         clear_used_buffs()
+        clear_megaphone_state()
     except Exception:
         pass
     if not ctx.task.detail.manual_purchase_at_end:
@@ -312,6 +306,7 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
         ctx.cultivate_detail.manual_purchase_completed):
         log.info("Manual purchase completed - returning to cultivate finish UI")
         ctx.cultivate_detail.learn_skill_done = True
+        ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
         return
         
@@ -319,12 +314,13 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
         log.info("Manual purchase mode enabled - returning to cultivate finish UI")
         ctx.cultivate_detail.manual_purchase_completed = True
         ctx.cultivate_detail.learn_skill_done = True
+        ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
         return
         
     if ctx.cultivate_detail.learn_skill_done:
         log.info("Skills already learned and confirmed - exiting skill learning")
-        log.debug(f"learn_skill_done flag was set to True - checking where this happened")
+        ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
         return
     learn_skill_list: list[list[str]]
@@ -378,10 +374,11 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
             thumb_center = (thumb[0] + thumb[1]) // 2 if thumb else TRACK_TOP + thumb_h // 2
 
         before_cal = img
-        sb_drag(ctx, thumb_center, thumb_center + 5)
+        cal_px = 30
+        sb_drag(ctx, thumb_center, thumb_center + cal_px)
         after_cal = ctx.ctrl.get_screen()
         shift_cal, conf_cal = find_content_shift(before_cal, after_cal)
-        ratio = shift_cal / 5 if (shift_cal > 0 and conf_cal > 0.85) else 14.0
+        ratio = shift_cal / cal_px if (shift_cal > 0 and conf_cal > 0.85) else 14.0
 
         img_dr = ctx.ctrl.get_screen()
         img_dr_rgb = cv2.cvtColor(img_dr, cv2.COLOR_BGR2RGB)
@@ -438,7 +435,7 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
                     early_exit = True
                     break
 
-                time.sleep(0.06)
+                time.sleep(0.068)
                 curr = ctx.ctrl.get_screen()
                 if curr is not None and not content_same(prev_frame, curr):
                     curr_rgb = cv2.cvtColor(curr, cv2.COLOR_BGR2RGB)
@@ -480,6 +477,7 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
 
         if early_exit:
             ctx.cultivate_detail.learn_skill_done = True
+            ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
             ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
             return
     else:
@@ -579,6 +577,7 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
 
     if _manual_purchase_confirmed():
         ctx.cultivate_detail.learn_skill_done = True
+        ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
         return
 
@@ -614,12 +613,15 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
 
             img = ctx.ctrl.get_screen()
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            if at_bottom(img_rgb):
-                break
-            img = ctx.ctrl.get_screen()
-            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             thumb = find_thumb(img_rgb)
             if thumb is None:
+                time.sleep(0.15)
+                img = ctx.ctrl.get_screen()
+                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                thumb = find_thumb(img_rgb)
+                if thumb is None:
+                    continue
+            if at_bottom(img_rgb):
                 break
             cursor = (thumb[0] + thumb[1]) // 2
             th = thumb[1] - thumb[0]
@@ -633,6 +635,7 @@ def script_cultivate_learn_skill(ctx: UmamusumeContext):
 
     if _manual_purchase_confirmed():
         ctx.cultivate_detail.learn_skill_done = True
+        ctx.cultivate_detail.turn_info.turn_learn_skill_done = True
         ctx.ctrl.click_by_point(RETURN_TO_CULTIVATE_FINISH)
         return
 

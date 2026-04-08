@@ -7,11 +7,36 @@ import bot.base.log as logger
 from bot.recog.ocr import ocr_line
 from bot.recog.image_matcher import image_match
 from module.umamusume.context import UmamusumeContext, log_detected_skill
-from module.umamusume.asset.template import Template, UMAMUSUME_REF_TEMPLATE_PATH, REF_HINT_LEVELS_TEXT
+from module.umamusume.asset.template import (
+    Template, UMAMUSUME_REF_TEMPLATE_PATH, REF_HINT_LEVELS_TEXT,
+    UI_CULTIVATE_EVENT_UMAMUSUME,
+    UI_CULTIVATE_EVENT_SUPPORT_CARD,
+    UI_CULTIVATE_EVENT_SCENARIO,
+)
 from module.umamusume.script.cultivate_task.event.manifest import get_event_choice
 from module.umamusume.script.cultivate_task.parse import parse_cultivate_event, get_canonical_skill_name
 
 log = logger.get_logger(__name__)
+
+EVENT_TEMPLATES = [
+    UI_CULTIVATE_EVENT_UMAMUSUME,
+    UI_CULTIVATE_EVENT_SUPPORT_CARD,
+    UI_CULTIVATE_EVENT_SCENARIO,
+]
+
+
+def is_still_on_event(ctrl):
+    img = ctrl.get_screen()
+    if img is None:
+        return False
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    for tpl in EVENT_TEMPLATES:
+        if image_match(gray, tpl).find_match:
+            return True
+    return False
+
+
+
 
 
 def parse_hint_skill(text):
@@ -104,6 +129,7 @@ def script_cultivate_event(ctx: UmamusumeContext):
     ctx.cultivate_detail.event_cooldown_until = time.time() + 1.5
 
     log.info("Event handler called")
+    ctx.cultivate_detail.mant_cleat_used = False
     
     img = ctx.ctrl.get_screen()
     if img is None or getattr(img, 'size', 0) == 0:
@@ -221,18 +247,20 @@ def script_cultivate_event(ctx: UmamusumeContext):
         choice_index = 2
 
     if choice_source == "database" and expected_count >= 2:
-        deadline = time.time() + 1.5
+        min_required = min(2, expected_count)
+        deadline = time.time() + 3.0
         while time.time() < deadline:
             if isinstance(selectors, list) and len(selectors) >= expected_count:
                 break
-            time.sleep(0.2)
+            time.sleep(0.3)
             try:
                 img_wait = ctx.ctrl.get_screen()
                 if img_wait is not None and getattr(img_wait, 'size', 0) > 0:
                     _, selectors_wait = parse_cultivate_event(ctx, img_wait)
-                    if isinstance(selectors_wait, list) and len(selectors_wait) >= expected_count:
+                    if isinstance(selectors_wait, list) and len(selectors_wait) >= min_required:
                         selectors = selectors_wait
-                        break
+                        if len(selectors) >= expected_count:
+                            break
             except Exception:
                 continue
         log.info(f"expected={expected_count}, got {len(selectors) if isinstance(selectors, list) else 0}")
@@ -278,4 +306,16 @@ def script_cultivate_event(ctx: UmamusumeContext):
         except:
             pass
     if not clicked:
+        if is_still_on_event(ctx.ctrl):
+            log.info(f"no selectors found for '{event_name}', retrying parse")
+            time.sleep(0.5)
+            img_retry = ctx.ctrl.get_screen()
+            if img_retry is not None:
+                _, retry_selectors = parse_cultivate_event(ctx, img_retry)
+                if isinstance(retry_selectors, list) and len(retry_selectors) > 0:
+                    fallback_idx = min(int(choice_index), len(retry_selectors)) - 1
+                    if fallback_idx < 0:
+                        fallback_idx = 0
+                    ctx.ctrl.click(int(retry_selectors[fallback_idx][0]), int(retry_selectors[fallback_idx][1]), f"Event fallback option-{fallback_idx + 1}")
+            ctx.cultivate_detail.event_cooldown_until = time.time() + 3.0
         return

@@ -19,6 +19,7 @@ log = logger.get_logger(__name__)
 detected_skills_log = {}
 detected_portraits_log = {}
 detected_items_log = {}
+detected_shop_items_log = {}
 
 def log_detected_portrait(name, favor_level, is_npc=False):
     if not name or favor_level == 0:
@@ -73,6 +74,35 @@ def log_detected_items(items):
 def clear_detected_items():
     detected_items_log.clear()
 
+def log_detected_shop_items(items):
+    preserved_rewards = {name: entry for name, entry in detected_shop_items_log.items()
+                         if entry.get('race_reward')}
+    detected_shop_items_log.clear()
+    for name, turns, buyable in items:
+        if not buyable:
+            continue
+        detected_shop_items_log[name] = {
+            "name": name,
+            "turns": turns,
+            "purchased": False,
+        }
+    for name, entry in preserved_rewards.items():
+        if name not in detected_shop_items_log:
+            detected_shop_items_log[name] = entry
+
+def add_detected_shop_items(names, turns):
+    for name in names:
+        existing = detected_shop_items_log.get(name)
+        detected_shop_items_log[name] = {
+            "name": name,
+            "turns": turns,
+            "purchased": False,
+            "race_reward": True,
+        }
+
+def clear_detected_shop_items():
+    detected_shop_items_log.clear()
+
 class CultivateContextDetail:
     turn_info: TurnInfo | None
     turn_info_history: list[TurnInfo]
@@ -117,6 +147,8 @@ class CultivateContextDetail:
     friendship_score_groups: list
     score_history: list[float]
     percentile_history: list[float]
+    last_title: str
+    same_title_count: int
 
     def __init__(self):
         self.expect_attribute = None
@@ -146,6 +178,7 @@ class CultivateContextDetail:
         self.mant_coins = 0
         self.mant_inventory_scanned = False
         self.mant_owned_items = []
+        self.mant_max_energy = 100
         self.user_provided_priority = False
         self.event_overrides = {}
         self.use_last_parents = False
@@ -158,6 +191,12 @@ class CultivateContextDetail:
         self.summer_score_threshold = DEFAULT_SUMMER_SCORE_THRESHOLD
         self.stat_value_multiplier = list(DEFAULT_STAT_VALUE_MULTIPLIER)
         self.wit_special_multiplier = list(DEFAULT_WIT_SPECIAL_MULTIPLIER)
+        self.team_sirius_enabled = False
+        self.team_sirius_percentile = 26
+        self.team_sirius_available_dates = []
+        self.team_sirius_last_date = -1
+        self.last_title = ""
+        self.same_title_count = 0
 
     def reset_skill_learn(self):
         self.learn_skill_done = False
@@ -184,6 +223,10 @@ def build_context(task: UmamusumeTask, ctrl) -> UmamusumeContext:
         clear_detected_skills()
         clear_detected_portraits()
         clear_detected_items()
+        clear_detected_shop_items()
+        from module.umamusume.persistence import clear_ignore_cat_food, clear_ignore_grilled_carrots
+        clear_ignore_cat_food()
+        clear_ignore_grilled_carrots()
         detail = CultivateContextDetail()
         detail.scenario = create_scenario(task.detail.scenario)
         if detail.scenario is None:
@@ -195,7 +238,7 @@ def build_context(task: UmamusumeTask, ctrl) -> UmamusumeContext:
         detail.learn_skill_list = [list(x) for x in (task.detail.learn_skill_list or [])]
         try:
             src = task.detail.learn_skill_list or []
-            detail.user_provided_priority = any((isinstance(x, list) and len(x) > 0) for x in src)
+            detail.user_provided_priority = any((isinstance(x, list) and x) for x in src)
         except Exception:
             detail.user_provided_priority = False
         detail.learn_skill_blacklist = list(task.detail.learn_skill_blacklist or [])
@@ -216,7 +259,7 @@ def build_context(task: UmamusumeTask, ctrl) -> UmamusumeContext:
         except Exception:
             detail.spirit_explosion = list(DEFAULT_SPIRIT_EXPLOSION)
         
-        # Support both spellings for backward compatibility (rest_threshold is correct)
+     
         detail.rest_threshold = getattr(task.detail, 'rest_threshold', getattr(task.detail, 'rest_treshold', getattr(task.detail, 'fast_path_energy_limit', 48)))
         detail.motivation_threshold_year1 = int(getattr(task.detail, 'motivation_threshold_year1', 3))
         detail.motivation_threshold_year2 = int(getattr(task.detail, 'motivation_threshold_year2', 4))
@@ -259,4 +302,27 @@ def build_context(task: UmamusumeTask, ctrl) -> UmamusumeContext:
             detail.event_overrides = {}
         
         ctx.cultivate_detail = detail
+
+        detail.team_sirius_available_dates = []
+        detail.team_sirius_enabled = False
+        detail.team_sirius_percentile = 26
+        detail.team_sirius_last_date = -1
+        pcs = getattr(task.detail, 'pal_card_store', None)
+        if isinstance(pcs, dict):
+            ts_data = pcs.get('team_sirius', None)
+            if isinstance(ts_data, dict) and ts_data.get('group') == 'team_sirius':
+                detail.team_sirius_enabled = bool(ts_data.get('enabled', False))
+                detail.team_sirius_percentile = int(ts_data.get('percentile', 26))
+        
+        try:
+            from module.umamusume.persistence import load_megaphone_state
+            mega_tier, mega_turns = load_megaphone_state()
+            detail.mant_megaphone_tier = mega_tier
+            detail.mant_megaphone_turns = mega_turns
+            if mega_tier > 0 and mega_turns > 0:
+                log.info("Restored megaphone state")
+        except Exception:
+            detail.mant_megaphone_tier = 0
+            detail.mant_megaphone_turns = 0
+
     return ctx
