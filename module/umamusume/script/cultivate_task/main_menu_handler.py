@@ -70,6 +70,7 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
         if current_date > 0:
             ctx.cultivate_detail.team_sirius_available_dates = []
             ctx.cultivate_detail.pal_event_stage = 0
+            ctx.cultivate_detail.pal_stage_detection_done_this_turn = False
             if hasattr(ctx.cultivate_detail, 'pal_last_detection_date'):
                 delattr(ctx.cultivate_detail, 'pal_last_detection_date')
 
@@ -114,7 +115,7 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
                 ctx.current_screen = img
 
         if not ts_enabled and ctx.cultivate_detail.prioritize_recreation:
-            if ctx.cultivate_detail.pal_event_stage <= 0:
+            if ctx.cultivate_detail.pal_event_stage <= 0 and not ctx.cultivate_detail.pal_stage_detection_done_this_turn:
                 img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
                 from module.umamusume.asset.template import UI_RECREATION_FRIEND_NOTIFICATION
                 result = image_match(img_gray, UI_RECREATION_FRIEND_NOTIFICATION)
@@ -128,6 +129,7 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
                     
                     calculated_stage = detect_pal_stage(ctx, img)
                     ctx.cultivate_detail.pal_event_stage = calculated_stage
+                    ctx.cultivate_detail.pal_stage_detection_done_this_turn = True
                     
                     pal_thresholds = ctx.cultivate_detail.pal_thresholds
                     if pal_thresholds and calculated_stage <= len(pal_thresholds):
@@ -137,8 +139,6 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
 
                     ctx.ctrl.click(5, 5)
                     time.sleep(0.15)
-                    ctx.cultivate_detail.turn_info.parse_main_menu_finish = False
-                    return
                 else:
                     if ctx.cultivate_detail.pal_event_stage > 0:
                         log.info("pal notification gone, resetting stage")
@@ -211,12 +211,13 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
         if should_use_team_sirius_recreation(ctx):
             if execute_team_sirius_recreation(ctx, trip_click_point=get_trip(ctx)):
                 return
-        if should_use_pal_outing_simple(ctx):
+        if getattr(ctx.cultivate_detail, 'team_sirius_enabled', False):
+            if execute_regular_recreation(ctx, trip_click_point=get_trip(ctx)):
+                return
+        from module.umamusume.script.cultivate_task.helpers import should_use_pal_outing
+        if should_use_pal_outing(ctx):
             ctx.ctrl.click_by_point(get_trip(ctx))
             return
-        ctx.cultivate_detail.turn_info.turn_operation = None
-        ctx.cultivate_detail.turn_info.parse_main_menu_finish = False
-        ctx.cultivate_detail.turn_info.parse_train_info_finish = False
         ctx.ctrl.click_by_point(CULTIVATE_REST)
         return
     
@@ -282,10 +283,11 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             if should_use_team_sirius_recreation(ctx):
                 if execute_team_sirius_recreation(ctx, trip_click_point=get_trip(ctx)):
                     return
-            if should_use_pal_outing_simple(ctx):
+            from module.umamusume.script.cultivate_task.helpers import should_use_pal_outing
+            if should_use_pal_outing(ctx):
                 ctx.ctrl.click_by_point(get_trip(ctx))
-            else:
-                ctx.ctrl.click_by_point(CULTIVATE_REST)
+                return
+            ctx.ctrl.click_by_point(CULTIVATE_REST)
             return
         else:
             base_energy, _, _ = scan_energy(ctx.ctrl)
@@ -306,13 +308,11 @@ def script_cultivate_main_menu(ctx: UmamusumeContext):
             if getattr(ctx.cultivate_detail, 'team_sirius_enabled', False):
                 if execute_regular_recreation(ctx, trip_click_point=get_trip(ctx)):
                     return
-            if should_use_pal_outing_simple(ctx):
+            from module.umamusume.script.cultivate_task.helpers import should_use_pal_outing
+            if should_use_pal_outing(ctx):
                 ctx.ctrl.click_by_point(get_trip(ctx))
                 return
-            ctx.cultivate_detail.turn_info.turn_operation = None
-            ctx.cultivate_detail.turn_info.parse_main_menu_finish = False
-            ctx.cultivate_detail.turn_info.parse_train_info_finish = False
-            ctx.ctrl.click_by_point(TO_TRAINING_SELECT)
+            ctx.ctrl.click_by_point(CULTIVATE_REST)
         elif turn_operation.turn_operation_type == TurnOperationType.TURN_OPERATION_TYPE_MEDIC:
             is_summer = is_summer_camp_period(ctx.cultivate_detail.turn_info.date)
             ctx.ctrl.click_by_point(get_medic(ctx, summer=is_summer))
